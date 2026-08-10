@@ -30,12 +30,12 @@ test('layout does not overflow horizontally at tablet width', async ({ page }) =
   expect(hasHorizontalOverflow).toBe(false);
 });
 
-test('the score container allows pinch-zoom/pan but not double-tap-zoom', async ({ page }) => {
+test('the score container does not let native touch panning steal taps', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
 
   const touchAction = await page.locator('.score-viewer').evaluate((el) => getComputedStyle(el).touchAction);
-  expect(touchAction).toBe('manipulation');
+  expect(touchAction).toBe('none');
 });
 
 test('tapping the score does not flash the default mobile tap-highlight', async ({ page }) => {

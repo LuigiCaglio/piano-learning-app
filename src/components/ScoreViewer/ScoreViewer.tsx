@@ -82,18 +82,20 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     let cancelled = false;
     let noteRegions: NoteRegion[] = [];
 
-    // Deliberately 'click', not 'pointerup'/'pointerdown': the score container scrolls
-    // horizontally (wide scores), and a real finger tap is almost never perfectly still.
-    // Browsers already disambiguate "this was a tap" from "this was a pan" for us before
-    // deciding whether to fire click -- pointerup fires (or gets pointercancel'd) regardless
-    // of that distinction, so it was silently swallowing taps that had any tiny movement.
-    const handleClick = (event: MouseEvent) => {
+    // pointerup, not click: Chromium's touch-to-click synthesis applies its own fixed "was
+    // this a tap or a drag" movement threshold (~10px) independent of touch-action, and a
+    // real finger tap routinely drifts further than that -- click was still swallowing taps
+    // that had noticeable movement even with touch-action: none on the container. pointerup
+    // has no such synthesis step; with native gesture-claiming disabled (touch-action: none
+    // in ScoreViewer.css), it's the container's only touch interaction, so it reliably fires
+    // for every touch regardless of drift.
+    const handlePointerUp = (event: PointerEvent) => {
       const hits = findNoteHitAtPoint(noteRegions, event.clientX, event.clientY);
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
     };
-    container.addEventListener('click', handleClick);
+    container.addEventListener('pointerup', handlePointerUp);
 
     // Note regions are cached viewport-relative rects (getBoundingClientRect()), which go
     // stale whenever anything scrolls -- not just on OSMD's own autoResize re-renders (e.g.
@@ -135,7 +137,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', handleScroll);
       container.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('click', handleClick);
+      container.removeEventListener('pointerup', handlePointerUp);
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
