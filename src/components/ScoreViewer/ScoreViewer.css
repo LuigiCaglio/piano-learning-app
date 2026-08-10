@@ -15,3 +15,17 @@
      doesn't govern. */
   touch-action: none;
 }
+
+/* TEMPORARY diagnostic panel -- remove once the real-device tap-to-identify issue is
+   root-caused. Deliberately loud styling so it's unmistakably a debug aid, not a real feature. */
+.score-viewer__debug {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #fff3cd;
+  border: 1px solid #e0a800;
+  border-radius: 6px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #664d03;
+  word-break: break-word;
+}

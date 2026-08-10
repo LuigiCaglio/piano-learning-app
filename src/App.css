@@ -43,6 +43,21 @@
   font-size: 0.9rem;
 }
 
+/* TEMPORARY diagnostic banner -- remove once the real-device tap-to-identify issue is
+   root-caused. */
+.global-error {
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f8d7da;
+  border: 1px solid #dc3545;
+  color: #58151c;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
 .app-footer {
   max-width: 1100px;
   margin: 24px auto 0;

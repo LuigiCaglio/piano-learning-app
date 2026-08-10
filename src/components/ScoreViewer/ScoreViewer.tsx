@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { buildNoteIndex, findNoteHitAtPoint, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
@@ -37,6 +37,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
   onMetronomeClicksReadyRef.current = onMetronomeClicksReady;
   const onLoadErrorRef = useRef(onLoadError);
   onLoadErrorRef.current = onLoadError;
+  // TEMPORARY diagnostic (remove once the real-device tap-to-identify issue is root-caused):
+  // shows exactly which event(s) a real tap fires and what the hit-test found, readable
+  // directly on the device without needing DevTools.
+  const [debugInfo, setDebugInfo] = useState('waiting for score to load...');
 
   useImperativeHandle(ref, () => ({
     advanceCursorTo(targetRealValue: number) {
@@ -85,8 +89,12 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // themselves. Screen position is deliberately NOT stored here; see findNoteHitAtPoint.
     let tappableNotes: TappableNote[] = [];
 
-    const handleTap = (clientX: number, clientY: number) => {
+    const handleTap = (source: string, clientX: number, clientY: number) => {
       const hits = findNoteHitAtPoint(tappableNotes, clientX, clientY);
+      setDebugInfo(
+        `${source} @ (${Math.round(clientX)}, ${Math.round(clientY)}) | regions=${tappableNotes.length} | ` +
+          `hit=${hits ? hits.map((h) => h.midi).join(',') : 'none'}`,
+      );
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
@@ -102,17 +110,25 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // - pointerup has no such synthesis step, so it still catches a tap click silently drops
     //   due to drift, on browsers where PointerEvent works as spec'd.
     // Firing both for the same tap just re-sets the same MIDI notes twice -- harmless.
-    const handleClick = (event: MouseEvent) => handleTap(event.clientX, event.clientY);
-    const handlePointerUp = (event: PointerEvent) => handleTap(event.clientX, event.clientY);
+    const handleClick = (event: MouseEvent) => handleTap('click', event.clientX, event.clientY);
+    const handlePointerUp = (event: PointerEvent) =>
+      handleTap(`pointerup(${event.pointerType})`, event.clientX, event.clientY);
     // Explicit pointer capture on pointerdown gives the browser the strongest possible signal
     // that JS owns this gesture, independent of whether it correctly honors touch-action: none
     // for gesture-claiming -- belt-and-suspenders alongside the CSS.
     const handlePointerDown = (event: PointerEvent) => {
+      setDebugInfo(
+        `pointerdown(${event.pointerType}) @ (${Math.round(event.clientX)}, ${Math.round(event.clientY)})`,
+      );
       container.setPointerCapture(event.pointerId);
+    };
+    const handlePointerCancel = (event: PointerEvent) => {
+      setDebugInfo(`pointercancel(${event.pointerType}) -- browser claimed the gesture natively`);
     };
     container.addEventListener('click', handleClick);
     container.addEventListener('pointerup', handlePointerUp);
     container.addEventListener('pointerdown', handlePointerDown);
+    container.addEventListener('pointercancel', handlePointerCancel);
 
     let resizeTimeoutId: ReturnType<typeof setTimeout>;
     const handleResize = () => {
@@ -129,6 +145,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
         if (cancelled) return;
         osmd.render();
         tappableNotes = buildNoteIndex(osmd);
+        setDebugInfo(`score ready, ${tappableNotes.length} tappable regions built -- tap a note`);
         // Cursor stays hidden until playback actually starts (see showCursor/hideCursor) --
         // otherwise it sits on the page looking like something is playing at all times.
         onScoreReadyRef.current?.(extractTimedNotes(osmd));
@@ -136,6 +153,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       })
       .catch((err: unknown) => {
         console.error('Failed to load/render score', err);
+        setDebugInfo(`LOAD ERROR: ${err instanceof Error ? err.message : String(err)}`);
         if (!cancelled) onLoadErrorRef.current?.('Could not read this score. It may not be a valid MusicXML file.');
       });
 
@@ -146,11 +164,17 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       container.removeEventListener('click', handleClick);
       container.removeEventListener('pointerup', handlePointerUp);
       container.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('pointercancel', handlePointerCancel);
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
     };
   }, [source]);
 
-  return <div ref={containerRef} className="score-viewer" />;
+  return (
+    <>
+      <div ref={containerRef} className="score-viewer" />
+      <div className="score-viewer__debug">DEBUG: {debugInfo}</div>
+    </>
+  );
 });
