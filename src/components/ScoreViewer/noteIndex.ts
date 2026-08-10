@@ -10,6 +10,11 @@ export interface NoteHit {
 export interface TappableNote {
   element: SVGGElement;
   hits: NoteHit[];
+  /** Identity of the system (line of music) this note renders in. A system resets its x
+   * coordinates back to the left margin, so two notes on different lines can land at a
+   * similar-looking x position -- this lets findColumnHit stay within one system instead of
+   * also matching an unrelated note on a different line. */
+  systemId: unknown;
 }
 
 interface GraphicalNoteWithSvg extends GraphicalNote {
@@ -27,6 +32,7 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
   for (const measures of measureList) {
     for (const measure of measures) {
       if (!measure) continue;
+      const systemId = measure.ParentMusicSystem;
       for (const staffEntry of measure.staffEntries) {
         for (const voiceEntry of staffEntry.graphicalVoiceEntries) {
           for (const note of voiceEntry.notes) {
@@ -39,7 +45,7 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
             const midi = sourceNote.halfTone + 12;
             let entry = noteByElement.get(svgG);
             if (!entry) {
-              entry = { element: svgG, hits: [] };
+              entry = { element: svgG, hits: [], systemId };
               noteByElement.set(svgG, entry);
               notes.push(entry);
             }
@@ -83,6 +89,36 @@ export function findNoteHitAtPoint(
       best = note;
     }
   }
+  if (best) return best.hits;
 
-  return best?.hits;
+  return findColumnHit(notes, x, y, toleranceCss);
+}
+
+/** Fallback for a tap that lands too far from any single note to match above -- most notably
+ * the empty gap between a grand staff's two staves. If the tap's *x* lines up with a note
+ * anywhere in the same system (line of music), selects every note at that beat rather than
+ * requiring a precise vertical hit -- e.g. tapping between the staves selects the full
+ * two-hand chord for that beat. Scoped to whichever system is vertically closest to the tap so
+ * a coincidentally similar x position on a different line of music doesn't also match. */
+function findColumnHit(notes: TappableNote[], x: number, y: number, toleranceCss: number): NoteHit[] | undefined {
+  let closestSystemId: unknown;
+  let closestSystemDistance = Infinity;
+  for (const note of notes) {
+    const rect = note.element.getBoundingClientRect();
+    const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+    if (dy < closestSystemDistance) {
+      closestSystemDistance = dy;
+      closestSystemId = note.systemId;
+    }
+  }
+
+  const hits: NoteHit[] = [];
+  for (const note of notes) {
+    if (note.systemId !== closestSystemId) continue;
+    const rect = note.element.getBoundingClientRect();
+    if (x >= rect.left - toleranceCss && x <= rect.right + toleranceCss) {
+      hits.push(...note.hits);
+    }
+  }
+  return hits.length > 0 ? hits : undefined;
 }
