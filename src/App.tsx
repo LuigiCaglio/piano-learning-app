@@ -86,6 +86,16 @@ function App() {
     engine.setLoop(range);
   }, [engine, timedNotes, loopRange]);
 
+  // The score cursor ("bouncing ball") should only be visible while actually playing --
+  // otherwise it sits on the page looking like something is playing when nothing is.
+  useEffect(() => {
+    if (isPlaying) {
+      scoreViewerRef.current?.showCursor();
+    } else {
+      scoreViewerRef.current?.hideCursor();
+    }
+  }, [isPlaying]);
+
   // Follow-along cursor: while playing, repeatedly nudge the OSMD cursor to the note
   // position matching the playback engine's current time. Uses the full (unfiltered) note
   // list so the cursor keeps tracking real score position even when a hand is muted.

@@ -22,6 +22,9 @@
 
 * {
   box-sizing: border-box;
+  /* Chrome/Safari show a translucent blue highlight over any tapped element by default;
+     it's especially jarring flashing across the score on every note tap. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
