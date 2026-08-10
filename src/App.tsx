@@ -184,6 +184,8 @@ function App() {
       </main>
       <footer className="app-footer">
         Piano sound: Salamander Grand Piano by Alexander Holm, CC BY 3.0.
+        <br />
+        build {__COMMIT_HASH__}
       </footer>
     </div>
   );

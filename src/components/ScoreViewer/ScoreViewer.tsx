@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { buildNoteIndex, findNoteHitAtPoint, type NoteRegion } from './noteIndex';
+import { buildNoteIndex, findNoteHitAtPoint, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
 import './ScoreViewer.css';
 
@@ -80,7 +80,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     osmdRef.current = osmd;
 
     let cancelled = false;
-    let noteRegions: NoteRegion[] = [];
+    // Which SVG element belongs to which note(s) -- stable across scroll/layout shifts, only
+    // rebuilt when OSMD actually re-renders (autoResize) and replaces the SVG elements
+    // themselves. Screen position is deliberately NOT stored here; see findNoteHitAtPoint.
+    let tappableNotes: TappableNote[] = [];
 
     // pointerup, not click: Chromium's touch-to-click synthesis applies its own fixed "was
     // this a tap or a drag" movement threshold (~10px) independent of touch-action, and a
@@ -90,37 +93,28 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // in ScoreViewer.css), it's the container's only touch interaction, so it reliably fires
     // for every touch regardless of drift.
     const handlePointerUp = (event: PointerEvent) => {
-      const hits = findNoteHitAtPoint(noteRegions, event.clientX, event.clientY);
+      const hits = findNoteHitAtPoint(tappableNotes, event.clientX, event.clientY);
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
     };
     container.addEventListener('pointerup', handlePointerUp);
 
-    // Note regions are cached viewport-relative rects (getBoundingClientRect()), which go
-    // stale whenever anything scrolls -- not just on OSMD's own autoResize re-renders (e.g.
-    // tablet rotation), but on ordinary page scroll and on the score container's own
-    // horizontal scroll (it's `overflow-x: auto` for wide scores). Without this, taps drift
-    // out of alignment with the actual notes as soon as the page has scrolled at all.
-    let rebuildTimeoutId: ReturnType<typeof setTimeout>;
-    const scheduleRebuild = (delay: number) => {
-      clearTimeout(rebuildTimeoutId);
-      rebuildTimeoutId = setTimeout(() => {
-        if (!cancelled) noteRegions = buildNoteIndex(osmd);
-      }, delay);
+    let resizeTimeoutId: ReturnType<typeof setTimeout>;
+    const handleResize = () => {
+      clearTimeout(resizeTimeoutId);
+      resizeTimeoutId = setTimeout(() => {
+        if (!cancelled) tappableNotes = buildNoteIndex(osmd);
+      }, 300);
     };
-    const handleResize = () => scheduleRebuild(300);
-    const handleScroll = () => scheduleRebuild(100);
     window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    container.addEventListener('scroll', handleScroll, { passive: true });
 
     osmd
       .load(source)
       .then(() => {
         if (cancelled) return;
         osmd.render();
-        noteRegions = buildNoteIndex(osmd);
+        tappableNotes = buildNoteIndex(osmd);
         // Cursor stays hidden until playback actually starts (see showCursor/hideCursor) --
         // otherwise it sits on the page looking like something is playing at all times.
         onScoreReadyRef.current?.(extractTimedNotes(osmd));
@@ -133,10 +127,8 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
 
     return () => {
       cancelled = true;
-      clearTimeout(rebuildTimeoutId);
+      clearTimeout(resizeTimeoutId);
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('pointerup', handlePointerUp);
       osmd.clear();
       container.innerHTML = '';
