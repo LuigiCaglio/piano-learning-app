@@ -104,6 +104,25 @@ export function findTimestampAtTime(notes: TimedNote[], currentTime: number): nu
   return target;
 }
 
+/** Inverse of findTimestampAtTime: the playback-seconds position of the note stack at the
+ * given OSMD enrolled timestamp, for seeking playback to a tapped note. Picks the closest
+ * match rather than requiring exact equality, since the timestamp here (from
+ * extractTimedNotes' own iterator walk) and the one a tap reports (from
+ * noteIndex.ts's GraphicalStaffEntry.getAbsoluteTimestamp()) come from different, if
+ * numerically equivalent, OSMD code paths. */
+export function findTimeAtTimestamp(notes: TimedNote[], timestampRealValue: number): number | null {
+  let best: TimedNote | null = null;
+  let bestDiff = Infinity;
+  for (const note of notes) {
+    const diff = Math.abs(note.timestamp.RealValue - timestampRealValue);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = note;
+    }
+  }
+  return best ? best.startTime : null;
+}
+
 export interface MeasureRange {
   min: number;
   max: number;

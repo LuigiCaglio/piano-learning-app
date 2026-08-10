@@ -92,6 +92,23 @@ test('switching hands mid-playback takes effect immediately', async ({ page }) =
   }
 });
 
+test('tapping a note only shows the active hand\'s notes when a hand filter is set', async ({ page }) => {
+  await page.goto('/');
+  await waitForScore(page);
+
+  // Index 8 is the bass-clef whole-note chord in measure 1 (C3+E3+G3), which shares beat 1
+  // with the treble melody's first note (C4, index 0) -- tapping it with no hand filter
+  // surfaces all four pitches (see tap-to-identify.spec.ts). With a hand filter active, only
+  // that hand's notes at the beat should show.
+  await page.locator('.hand-selector__option', { hasText: 'Right hand' }).click();
+  await page.locator('.score-viewer svg g.vf-stavenote').nth(8).click();
+  await expect(page.locator('.note-readout')).toHaveText('C4');
+
+  await page.locator('.hand-selector__option', { hasText: 'Left hand' }).click();
+  await page.locator('.score-viewer svg g.vf-stavenote').nth(8).click();
+  await expect(page.locator('.note-readout')).toHaveText('C3, E3, G3');
+});
+
 test('resets to "both hands" when a different piece is opened', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);

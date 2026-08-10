@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import demoScore from './data/demo.musicxml?raw';
 import { ScoreViewer, type ScoreViewerHandle } from './components/ScoreViewer/ScoreViewer';
+import type { NoteHit } from './components/ScoreViewer/noteIndex';
 import { PianoKeyboard } from './components/PianoKeyboard/PianoKeyboard';
 import { TransportControls } from './components/TransportControls';
 import { LoopSelector, type LoopRangeState } from './components/LoopSelector';
@@ -11,6 +12,7 @@ import { listPieces, touchPiece, type Piece } from './components/PieceLibrary/db
 import { usePlaybackEngine } from './playback/usePlaybackEngine';
 import { midiToNoteName } from './lib/midi';
 import {
+  findTimeAtTimestamp,
   findTimestampAtTime,
   getMeasureRange,
   measureRangeToSeconds,
@@ -149,6 +151,20 @@ function App() {
     }
   };
 
+  // Tapping a note reports the whole beat across every staff (see ScoreViewer/noteIndex.ts);
+  // narrow that down to one hand here, same as playableNotes below, when a hand filter is
+  // active. Also seeks playback there, so pressing Play next starts from the tapped position
+  // instead of always the beginning -- uses timedNotes (the full, hand-unfiltered list) for
+  // that lookup since the seek target is a point in time, independent of which hand is
+  // currently audible.
+  const handleNoteTap = (hits: NoteHit[]) => {
+    const targetStaff = handFilter === 'right' ? STAFF_ID_RIGHT_HAND : handFilter === 'left' ? STAFF_ID_LEFT_HAND : null;
+    const filtered = targetStaff === null ? hits : hits.filter((hit) => hit.staffId === targetStaff);
+    setActiveMidiNotes(filtered.map((hit) => hit.midi));
+    const time = findTimeAtTimestamp(timedNotes, hits[0].timestampRealValue);
+    if (time !== null) engine?.seek(time);
+  };
+
   return (
     <div className="app">
       <header className="app-header">
@@ -171,7 +187,7 @@ function App() {
         <ScoreViewer
           ref={scoreViewerRef}
           source={source}
-          onNoteTap={setActiveMidiNotes}
+          onNoteTap={handleNoteTap}
           onScoreReady={setTimedNotes}
           onMetronomeClicksReady={setMetronomeClicks}
           onLoadError={setLoadError}
