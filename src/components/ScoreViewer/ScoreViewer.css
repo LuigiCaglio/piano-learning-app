@@ -1,0 +1,12 @@
+.score-viewer {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 8px;
+  overflow-x: auto;
+  cursor: pointer;
+  /* Allow panning/pinch-zoom (useful for reading a score) but suppress the browser's
+     double-tap-to-zoom gesture, which would otherwise fire when tapping two nearby notes
+     in quick succession. */
+  touch-action: manipulation;
+}
