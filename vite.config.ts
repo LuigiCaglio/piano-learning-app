@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -7,9 +8,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 // repo name -- Vite's `base` handles the build output, and the PWA options below mirror it.
 const BASE_PATH = '/piano-learning-app/'
 
+// Shown in the footer so "am I actually on the latest build" is a glance, not a debugging
+// session -- this exact question has burned real time more than once.
+const COMMIT_HASH = execSync('git rev-parse --short HEAD').toString().trim()
+
 // https://vite.dev/config/
 export default defineConfig({
   base: BASE_PATH,
+  define: {
+    __COMMIT_HASH__: JSON.stringify(COMMIT_HASH),
+  },
   plugins: [
     react(),
     VitePWA({

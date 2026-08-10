@@ -4,11 +4,11 @@ export interface NoteHit {
   midi: number;
 }
 
-/** A tappable region on the rendered score: the on-screen bounding box of one chord/note
- * group (VexFlow draws a chord's noteheads as a single stack, sharing one SVG group) plus
- * every pitch sounding there. */
-export interface NoteRegion {
-  rect: DOMRect;
+/** A tappable element on the rendered score: the SVG group for one chord/note stack (VexFlow
+ * draws a chord's noteheads as a single stack, sharing one SVG group) plus every pitch
+ * sounding there. Deliberately holds no position data -- see findNoteHitAtPoint for why. */
+export interface TappableNote {
+  element: SVGGElement;
   hits: NoteHit[];
 }
 
@@ -16,9 +16,12 @@ interface GraphicalNoteWithSvg extends GraphicalNote {
   getSVGGElement?: () => SVGGElement | undefined;
 }
 
-export function buildNoteIndex(osmd: OpenSheetMusicDisplay): NoteRegion[] {
-  const regions: NoteRegion[] = [];
-  const regionByElement = new Map<SVGGElement, NoteRegion>();
+/** Which SVG element belongs to which note(s) is stable until OSMD re-renders (e.g. on
+ * resize) -- unlike screen position, which changes on every scroll, and isn't captured here
+ * at all. */
+export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
+  const notes: TappableNote[] = [];
+  const noteByElement = new Map<SVGGElement, TappableNote>();
   const measureList = osmd.GraphicSheet?.MeasureList ?? [];
 
   for (const measures of measureList) {
@@ -34,42 +37,50 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): NoteRegion[] {
             if (!svgG) continue;
 
             const midi = sourceNote.halfTone + 12;
-            let region = regionByElement.get(svgG);
-            if (!region) {
-              region = { rect: svgG.getBoundingClientRect(), hits: [] };
-              regionByElement.set(svgG, region);
-              regions.push(region);
+            let entry = noteByElement.get(svgG);
+            if (!entry) {
+              entry = { element: svgG, hits: [] };
+              noteByElement.set(svgG, entry);
+              notes.push(entry);
             }
-            region.hits.push({ midi });
+            entry.hits.push({ midi });
           }
         }
       }
     }
   }
 
-  return regions;
+  return notes;
 }
 
-/** Finds the note region nearest a tap point, within `toleranceCss` CSS pixels of its
- * bounding box. Note heads render far smaller than a comfortable touch target, so distance
- * to the box (not exact containment) is what makes tapping usable on a tablet. */
+/** Finds the note nearest a tap point, within `toleranceCss` CSS pixels of its bounding box.
+ * Note heads render far smaller than a comfortable touch target, so distance to the box (not
+ * exact containment) is what makes tapping usable on a tablet.
+ *
+ * Deliberately reads each element's position fresh via getBoundingClientRect() on every call,
+ * rather than from a cache built once after render: a cached rect is only correct until the
+ * next scroll (page or container), resize, font swap, or anything else that shifts layout --
+ * an open-ended list of triggers we'd otherwise have to individually detect and rebuild on.
+ * Querying live is the one approach immune to all of them by construction. A few hundred
+ * getBoundingClientRect() calls on a single tap is imperceptible; this must not be called
+ * per animation frame. */
 export function findNoteHitAtPoint(
-  regions: NoteRegion[],
+  notes: TappableNote[],
   x: number,
   y: number,
   toleranceCss = 20,
 ): NoteHit[] | undefined {
-  let best: NoteRegion | undefined;
+  let best: TappableNote | undefined;
   let bestDistance = Infinity;
 
-  for (const region of regions) {
-    const { rect } = region;
+  for (const note of notes) {
+    const rect = note.element.getBoundingClientRect();
     const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
     const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
     const distance = Math.hypot(dx, dy);
     if (distance <= toleranceCss && distance < bestDistance) {
       bestDistance = distance;
-      best = region;
+      best = note;
     }
   }
 
