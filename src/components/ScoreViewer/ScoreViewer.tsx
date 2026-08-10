@@ -85,28 +85,34 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // themselves. Screen position is deliberately NOT stored here; see findNoteHitAtPoint.
     let tappableNotes: TappableNote[] = [];
 
-    // pointerup, not click: Chromium's touch-to-click synthesis applies its own fixed "was
-    // this a tap or a drag" movement threshold (~10px) independent of touch-action, and a
-    // real finger tap routinely drifts further than that -- click was still swallowing taps
-    // that had noticeable movement even with touch-action: none on the container. pointerup
-    // has no such synthesis step.
-    const handlePointerUp = (event: PointerEvent) => {
-      const hits = findNoteHitAtPoint(tappableNotes, event.clientX, event.clientY);
+    const handleTap = (clientX: number, clientY: number) => {
+      const hits = findNoteHitAtPoint(tappableNotes, clientX, clientY);
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
     };
-    // Explicit pointer capture on pointerdown: this is the authoritative way to guarantee
-    // pointerup delivery for the rest of this touch sequence, on this element, regardless of
-    // where the finger drifts -- a stronger, more direct signal to the browser that JS owns
-    // this gesture than touch-action CSS alone. touch-action: none (ScoreViewer.css) should be
-    // sufficient by itself, but capturing explicitly removes any dependency on a browser
-    // correctly/consistently honoring that CSS property for gesture-claiming decisions.
+    // Both click AND pointerup drive the same hit-test, deliberately redundant:
+    // - click is the exact event every other working control in this app uses (Play/Pause,
+    //   checkboxes, the piece library) -- the one mechanism proven reliable on the user's real
+    //   tablet, an older Android device where PointerEvent support (setPointerCapture,
+    //   touch-action honoring) may simply be patchier than in the desktop Chromium this is
+    //   tested against. But click alone has a real gap: Chromium's touch-to-click synthesis
+    //   applies its own movement threshold, and a real finger tap that drifts past it gets
+    //   cancelled -- confirmed via a CDP-simulated real touch sequence in this repo's tests.
+    // - pointerup has no such synthesis step, so it still catches a tap click silently drops
+    //   due to drift, on browsers where PointerEvent works as spec'd.
+    // Firing both for the same tap just re-sets the same MIDI notes twice -- harmless.
+    const handleClick = (event: MouseEvent) => handleTap(event.clientX, event.clientY);
+    const handlePointerUp = (event: PointerEvent) => handleTap(event.clientX, event.clientY);
+    // Explicit pointer capture on pointerdown gives the browser the strongest possible signal
+    // that JS owns this gesture, independent of whether it correctly honors touch-action: none
+    // for gesture-claiming -- belt-and-suspenders alongside the CSS.
     const handlePointerDown = (event: PointerEvent) => {
       container.setPointerCapture(event.pointerId);
     };
-    container.addEventListener('pointerdown', handlePointerDown);
+    container.addEventListener('click', handleClick);
     container.addEventListener('pointerup', handlePointerUp);
+    container.addEventListener('pointerdown', handlePointerDown);
 
     let resizeTimeoutId: ReturnType<typeof setTimeout>;
     const handleResize = () => {
@@ -137,8 +143,9 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       cancelled = true;
       clearTimeout(resizeTimeoutId);
       window.removeEventListener('resize', handleResize);
-      container.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('click', handleClick);
       container.removeEventListener('pointerup', handlePointerUp);
+      container.removeEventListener('pointerdown', handlePointerDown);
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
