@@ -1,12 +1,15 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { buildNoteIndex, findNoteHitAtPoint, type TappableNote } from './noteIndex';
+import { buildNoteIndex, findNoteHitAtPoint, type NoteHit, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
 import './ScoreViewer.css';
 
 interface ScoreViewerProps {
   source: string | Blob;
-  onNoteTap?: (midiNotes: number[]) => void;
+  /** Reports every note at the tapped beat, across all staves -- see findNoteHitAtPoint. A
+   * caller that only wants one hand (e.g. a hand filter) should narrow this down itself via
+   * NoteHit.staffId; this component has no notion of hand filtering. */
+  onNoteTap?: (hits: NoteHit[]) => void;
   onScoreReady?: (timedNotes: TimedNote[]) => void;
   onMetronomeClicksReady?: (clicks: MetronomeClick[]) => void;
   onLoadError?: (message: string) => void;
@@ -102,7 +105,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
           `hit=${hits ? hits.map((h) => h.midi).join(',') : 'none'}`,
       );
       if (hits && hits.length > 0) {
-        onNoteTapRef.current?.(hits.map((hit) => hit.midi));
+        onNoteTapRef.current?.(hits);
         // Mark the tapped note's position on the score itself, via the exact same cursor
         // mechanism playback uses -- previously a tap only updated the piano keyboard below
         // the score, with nothing showing where the tap actually landed on the staff.

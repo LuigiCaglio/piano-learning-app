@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Fraction } from 'opensheetmusicdisplay';
 import {
+  findTimeAtTimestamp,
   findTimestampAtTime,
   getMeasureRange,
   measureRangeToSeconds,
@@ -64,6 +65,32 @@ describe('findTimestampAtTime', () => {
 
   it('stays at the final timestamp once past the end of the piece', () => {
     expect(findTimestampAtTime(demoNotes, 100)).toBe(1.75);
+  });
+});
+
+describe('findTimeAtTimestamp', () => {
+  it('returns null for an empty note list', () => {
+    expect(findTimeAtTimestamp([], 0.25)).toBeNull();
+  });
+
+  it('returns the seconds position of the note stack at the given timestamp', () => {
+    expect(findTimeAtTimestamp(demoNotes, 0.0)).toBe(0.0);
+    expect(findTimeAtTimestamp(demoNotes, 0.25)).toBe(0.6);
+    expect(findTimeAtTimestamp(demoNotes, 1.75)).toBe(4.2);
+  });
+
+  it('picks the closest match rather than requiring exact equality', () => {
+    // Simulates a tap's timestamp (from a different OSMD code path) landing a hair off an
+    // exact match still finding the intended note stack.
+    expect(findTimeAtTimestamp(demoNotes, 0.2501)).toBe(0.6);
+  });
+
+  it('is the inverse of findTimestampAtTime for any given note onset', () => {
+    for (const t of [0.0, 0.6, 1.2, 1.8, 2.4, 3.0, 3.6, 4.2]) {
+      const timestamp = findTimestampAtTime(demoNotes, t);
+      expect(timestamp).not.toBeNull();
+      expect(findTimeAtTimestamp(demoNotes, timestamp!)).toBe(t);
+    }
   });
 });
 

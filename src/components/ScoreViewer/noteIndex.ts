@@ -7,6 +7,10 @@ export interface NoteHit {
    * spot via the same mechanism playback already uses, instead of only updating the piano
    * keyboard below the score. */
   timestampRealValue: number;
+  /** The staff this note is written on, 1-indexed as MusicXML/OSMD assign it (matches
+   * TimedNote.staffId in extractTimedNotes.ts) -- lets a caller narrow a tap's whole-beat
+   * result down to one hand when a hand filter is active. */
+  staffId: number;
 }
 
 /** A tappable element on the rendered score: the SVG group for one chord/note stack (VexFlow
@@ -49,13 +53,14 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
             if (!svgG) continue;
 
             const midi = sourceNote.halfTone + 12;
+            const staffId = sourceNote.ParentStaff?.Id ?? 0;
             let entry = noteByElement.get(svgG);
             if (!entry) {
               entry = { element: svgG, hits: [], systemId };
               noteByElement.set(svgG, entry);
               notes.push(entry);
             }
-            entry.hits.push({ midi, timestampRealValue });
+            entry.hits.push({ midi, timestampRealValue, staffId });
           }
         }
       }
@@ -65,9 +70,18 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
   return notes;
 }
 
-/** Finds the note nearest a tap point, within `toleranceCss` CSS pixels of its bounding box.
- * Note heads render far smaller than a comfortable touch target, so distance to the box (not
- * exact containment) is what makes tapping usable on a tablet.
+/** Finds every note at the beat nearest a tap point -- across every staff, not just whichever
+ * one is literally under the fingertip. Identifying a note is about "what's happening at this
+ * beat" (the whole two-hand chord), not just the single notehead nearest the tap; callers that
+ * want one hand only (e.g. a hand filter) should narrow the result by NoteHit.staffId
+ * themselves, since this module has no notion of hand filtering.
+ *
+ * First looks for a note stack within `toleranceCss` CSS pixels of the tap (note heads render
+ * far smaller than a comfortable touch target, so distance to the box, not exact containment,
+ * is what makes tapping usable on a tablet). If that finds nothing -- most notably a tap in the
+ * empty gap between a grand staff's two staves -- falls back to whichever note in whichever
+ * system (line of music) is vertically closest to the tap and still within x tolerance. Either
+ * way, the match is then expanded to every note at that same exact beat (see collectWholeBeat).
  *
  * Deliberately reads each element's position fresh via getBoundingClientRect() on every call,
  * rather than from a cache built once after render: a cached rect is only correct until the
@@ -95,18 +109,45 @@ export function findNoteHitAtPoint(
       best = note;
     }
   }
-  if (best) return best.hits;
+  if (best) return collectWholeBeat(notes, best);
 
-  return findColumnHit(notes, x, y, toleranceCss);
+  return findColumnSeed(notes, x, y, toleranceCss);
+}
+
+/** Notes at the exact same beat can still land a handful of pixels apart on screen (rounding
+ * in each staff's own layout pass), so this equality check must tolerate float noise --
+ * unlike telling genuinely different beats apart, which needs no tolerance at all: OSMD
+ * assigns each beat its own exact timestamp regardless of rendering. */
+const SAME_BEAT_EPSILON = 1e-6;
+
+/** Every note sharing `seed`'s system and exact beat (OSMD timestamp), unioning their hits --
+ * e.g. both hands' notes at once for a grand-staff chord. Matching on timestamp rather than
+ * screen x avoids having to pick a pixel-distance threshold that's simultaneously wide enough
+ * to bridge a chord's own accidentals/ledger-line spread and narrow enough not to also catch
+ * a genuinely different, merely nearby, beat. Every hit within one TappableNote already shares
+ * one timestamp (they come from the same staffEntry in buildNoteIndex), so seed.hits[0] stands
+ * in for the whole stack. */
+function collectWholeBeat(notes: TappableNote[], seed: TappableNote): NoteHit[] {
+  const seedTimestamp = seed.hits[0]?.timestampRealValue ?? 0;
+  const hits: NoteHit[] = [];
+  for (const note of notes) {
+    if (note.systemId !== seed.systemId) continue;
+    const noteTimestamp = note.hits[0]?.timestampRealValue ?? 0;
+    if (Math.abs(noteTimestamp - seedTimestamp) < SAME_BEAT_EPSILON) {
+      hits.push(...note.hits);
+    }
+  }
+  return hits;
 }
 
 /** Fallback for a tap that lands too far from any single note to match above -- most notably
- * the empty gap between a grand staff's two staves. If the tap's *x* lines up with a note
- * anywhere in the same system (line of music), selects every note at that beat rather than
- * requiring a precise vertical hit -- e.g. tapping between the staves selects the full
- * two-hand chord for that beat. Scoped to whichever system is vertically closest to the tap so
- * a coincidentally similar x position on a different line of music doesn't also match. */
-function findColumnHit(notes: TappableNote[], x: number, y: number, toleranceCss: number): NoteHit[] | undefined {
+ * the empty gap between a grand staff's two staves. Finds whichever note is horizontally
+ * nearest the tap (within toleranceCss) in whichever system (line of music) is vertically
+ * closest to the tap, then seeds a whole-beat collection from it rather than requiring a
+ * precise vertical hit -- e.g. tapping between the staves selects the full two-hand chord for
+ * that beat. Scoped to the closest system so a coincidentally similar x position on a
+ * different line of music doesn't also match. */
+function findColumnSeed(notes: TappableNote[], x: number, y: number, toleranceCss: number): NoteHit[] | undefined {
   let closestSystemId: unknown;
   let closestSystemDistance = Infinity;
   for (const note of notes) {
@@ -118,13 +159,16 @@ function findColumnHit(notes: TappableNote[], x: number, y: number, toleranceCss
     }
   }
 
-  const hits: NoteHit[] = [];
+  let seed: TappableNote | undefined;
+  let seedDistance = Infinity;
   for (const note of notes) {
     if (note.systemId !== closestSystemId) continue;
     const rect = note.element.getBoundingClientRect();
-    if (x >= rect.left - toleranceCss && x <= rect.right + toleranceCss) {
-      hits.push(...note.hits);
+    const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0;
+    if (dx <= toleranceCss && dx < seedDistance) {
+      seedDistance = dx;
+      seed = note;
     }
   }
-  return hits.length > 0 ? hits : undefined;
+  return seed ? collectWholeBeat(notes, seed) : undefined;
 }

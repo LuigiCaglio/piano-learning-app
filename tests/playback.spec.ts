@@ -77,6 +77,31 @@ test.describe('playback', () => {
     await expect(page.locator('.note-readout')).toContainText('C4', { timeout: 2_000 });
   });
 
+  test('tapping a note and pressing play starts playback from there, not the beginning', async ({ page }) => {
+    // Index 7 is the last melody note (C5, measure 2, starting at ~4.2s of the ~4.8s piece).
+    // Tapping it should seek playback there, so playback should wrap up almost immediately
+    // (only ~0.6s left) rather than taking the full ~4.8s a fresh start would, and no earlier
+    // melody note should ever sound.
+    await page.locator('.score-viewer svg g.vf-stavenote').nth(7).click();
+    await expect(page.locator('.note-readout')).toHaveText('C5');
+
+    const playPause = page.locator('.transport-controls__play-pause');
+    await playPause.click();
+    await expect(playPause).toHaveText('Pause');
+
+    const readouts: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      await page.waitForTimeout(200);
+      readouts.push((await page.locator('.note-readout').textContent()) ?? '');
+    }
+    const earlierMelodyNotes = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'];
+    for (const noteName of earlierMelodyNotes) {
+      expect(readouts.some((r) => r.includes(noteName))).toBe(false);
+    }
+
+    await expect(playPause).toHaveText('Play', { timeout: 3_000 });
+  });
+
   test('changing tempo mid-playback keeps playing instead of breaking scheduling', async ({ page }) => {
     const playPause = page.locator('.transport-controls__play-pause');
     const slider = page.locator('input[type="range"]');
