@@ -89,15 +89,23 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // this a tap or a drag" movement threshold (~10px) independent of touch-action, and a
     // real finger tap routinely drifts further than that -- click was still swallowing taps
     // that had noticeable movement even with touch-action: none on the container. pointerup
-    // has no such synthesis step; with native gesture-claiming disabled (touch-action: none
-    // in ScoreViewer.css), it's the container's only touch interaction, so it reliably fires
-    // for every touch regardless of drift.
+    // has no such synthesis step.
     const handlePointerUp = (event: PointerEvent) => {
       const hits = findNoteHitAtPoint(tappableNotes, event.clientX, event.clientY);
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
     };
+    // Explicit pointer capture on pointerdown: this is the authoritative way to guarantee
+    // pointerup delivery for the rest of this touch sequence, on this element, regardless of
+    // where the finger drifts -- a stronger, more direct signal to the browser that JS owns
+    // this gesture than touch-action CSS alone. touch-action: none (ScoreViewer.css) should be
+    // sufficient by itself, but capturing explicitly removes any dependency on a browser
+    // correctly/consistently honoring that CSS property for gesture-claiming decisions.
+    const handlePointerDown = (event: PointerEvent) => {
+      container.setPointerCapture(event.pointerId);
+    };
+    container.addEventListener('pointerdown', handlePointerDown);
     container.addEventListener('pointerup', handlePointerUp);
 
     let resizeTimeoutId: ReturnType<typeof setTimeout>;
@@ -129,6 +137,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       cancelled = true;
       clearTimeout(resizeTimeoutId);
       window.removeEventListener('resize', handleResize);
+      container.removeEventListener('pointerdown', handlePointerDown);
       container.removeEventListener('pointerup', handlePointerUp);
       osmd.clear();
       container.innerHTML = '';
