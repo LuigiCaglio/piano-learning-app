@@ -1,0 +1,39 @@
+import { test, expect } from '@playwright/test';
+import { waitForScore } from './helpers.js';
+
+// Runs under the 'ipad-landscape' project (1024x768, touch-enabled) configured in
+// playwright.config.ts.
+
+const MIN_TOUCH_TARGET = 40; // slightly under the 44px guideline to allow for antialiasing/rounding
+
+test('key touch targets meet minimum size guidelines', async ({ page }) => {
+  await page.goto('/');
+  await waitForScore(page);
+
+  const playPause = await page.locator('.transport-controls__play-pause').boundingBox();
+  expect(playPause?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+
+  const importButton = await page.locator('.app-header button').boundingBox();
+  expect(importButton?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+
+  const loopToggle = await page.locator('.loop-selector__toggle').boundingBox();
+  expect(loopToggle?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+});
+
+test('layout does not overflow horizontally at tablet width', async ({ page }) => {
+  await page.goto('/');
+  await waitForScore(page);
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+});
+
+test('the score container allows pinch-zoom/pan but not double-tap-zoom', async ({ page }) => {
+  await page.goto('/');
+  await waitForScore(page);
+
+  const touchAction = await page.locator('.score-viewer').evaluate((el) => getComputedStyle(el).touchAction);
+  expect(touchAction).toBe('manipulation');
+});

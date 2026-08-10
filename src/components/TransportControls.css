@@ -1,0 +1,97 @@
+.transport-controls {
+  margin: 16px 0;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+.transport-controls__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.transport-controls__play-pause {
+  font-size: 1rem;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  border: none;
+  background: #2f7a3d;
+  color: white;
+  cursor: pointer;
+}
+
+.transport-controls__play-pause:disabled {
+  background: #9aa19b;
+  cursor: not-allowed;
+}
+
+.transport-controls__tempo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.transport-controls__tempo input[type='range'] {
+  flex: 1;
+  height: 44px;
+  touch-action: manipulation;
+}
+
+.transport-controls__tempo input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #2f7a3d;
+  cursor: pointer;
+  margin-top: -11px;
+}
+
+.transport-controls__tempo input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.transport-controls__tempo input[type='range']::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #2f7a3d;
+  border: none;
+  cursor: pointer;
+}
+
+.transport-controls__tempo input[type='range']::-moz-range-track {
+  height: 4px;
+  background: #ccc;
+  border-radius: 2px;
+}
+
+.transport-controls__metronome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transport-controls__metronome input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.transport-controls__error {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #a12f26;
+}

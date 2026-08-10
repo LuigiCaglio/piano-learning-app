@@ -1,0 +1,36 @@
+.loop-selector {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.loop-selector__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.loop-selector__toggle input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.loop-selector__measure-input {
+  width: 56px;
+  min-height: 40px;
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
