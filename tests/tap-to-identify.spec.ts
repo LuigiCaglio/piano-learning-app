@@ -65,4 +65,31 @@ test.describe('tap-to-identify', () => {
     await notes.nth(8).click();
     await expect(page.locator('.note-readout')).toHaveText('C3, E3, G3');
   });
+
+  test('a real touch with natural drift still registers as a tap, not a scroll', async ({ page, context }) => {
+    // A genuine finger tap almost never lands perfectly still (unlike a mouse click or
+    // page.click()). If the score container claims horizontal touch movement for native
+    // panning, the browser cancels the tap as soon as the finger drifts a bit -- this
+    // dispatches a real touch sequence via CDP to reproduce that, rather than the
+    // higher-level .click() the other tests use.
+    const box = await page.locator('.score-viewer svg g.vf-stavenote').nth(0).boundingBox();
+    if (!box) throw new Error('note bounding box not found');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+
+    type TouchEventType = 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel';
+    const client = await context.newCDPSession(page);
+    const dispatch = (type: TouchEventType, px: number, py: number) =>
+      client.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py, id: 1 }],
+      });
+
+    await dispatch('touchStart', x, y);
+    await dispatch('touchMove', x + 18, y + 12); // ~22px of drift -- realistic for a real tap
+    await page.waitForTimeout(30);
+    await dispatch('touchEnd', x + 18, y + 12);
+
+    await expect(page.locator('.note-readout')).toHaveText('C4');
+  });
 });
