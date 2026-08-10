@@ -37,3 +37,14 @@ test('the score container allows pinch-zoom/pan but not double-tap-zoom', async 
   const touchAction = await page.locator('.score-viewer').evaluate((el) => getComputedStyle(el).touchAction);
   expect(touchAction).toBe('manipulation');
 });
+
+test('tapping the score does not flash the default mobile tap-highlight', async ({ page }) => {
+  await page.goto('/');
+  await waitForScore(page);
+
+  const tapHighlight = await page
+    .locator('.score-viewer')
+    .evaluate((el) => getComputedStyle(el).getPropertyValue('-webkit-tap-highlight-color'));
+  // Browsers normalize a "transparent" tap-highlight-color to rgba(0, 0, 0, 0).
+  expect(tapHighlight).toBe('rgba(0, 0, 0, 0)');
+});

@@ -16,6 +16,11 @@ export interface ScoreViewerHandle {
   /** Advances (or, for an earlier target, resets and fast-forwards) the OSMD cursor to the
    * given enrolled-timestamp real value, so it tracks playback position ("bouncing ball"). */
   advanceCursorTo: (targetRealValue: number) => void;
+  /** Shows the score cursor. Only meant to be visible during active playback -- otherwise it
+   * sits on the page looking like something is playing when nothing is. */
+  showCursor: () => void;
+  /** Hides the score cursor and resets it to the start, ready for the next playback. */
+  hideCursor: () => void;
 }
 
 export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(function ScoreViewer(
@@ -50,6 +55,15 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       ) {
         cursor.next();
       }
+    },
+    showCursor() {
+      osmdRef.current?.cursor.show();
+    },
+    hideCursor() {
+      const cursor = osmdRef.current?.cursor;
+      if (!cursor) return;
+      cursor.hide();
+      cursor.reset();
     },
   }));
 
@@ -93,7 +107,8 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
         if (cancelled) return;
         osmd.render();
         noteRegions = buildNoteIndex(osmd);
-        osmd.cursor.show();
+        // Cursor stays hidden until playback actually starts (see showCursor/hideCursor) --
+        // otherwise it sits on the page looking like something is playing at all times.
         onScoreReadyRef.current?.(extractTimedNotes(osmd));
         onMetronomeClicksReadyRef.current?.(extractMetronomeClicks(osmd));
       })
