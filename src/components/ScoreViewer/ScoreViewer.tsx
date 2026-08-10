@@ -90,16 +90,23 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     };
     container.addEventListener('pointerup', handlePointerUp);
 
-    // OSMD's autoResize re-renders internally (e.g. on tablet rotation), which replaces the
-    // SVG note elements our cached regions point to -- rebuild after resizes settle.
-    let resizeTimeoutId: ReturnType<typeof setTimeout>;
-    const handleResize = () => {
-      clearTimeout(resizeTimeoutId);
-      resizeTimeoutId = setTimeout(() => {
+    // Note regions are cached viewport-relative rects (getBoundingClientRect()), which go
+    // stale whenever anything scrolls -- not just on OSMD's own autoResize re-renders (e.g.
+    // tablet rotation), but on ordinary page scroll and on the score container's own
+    // horizontal scroll (it's `overflow-x: auto` for wide scores). Without this, taps drift
+    // out of alignment with the actual notes as soon as the page has scrolled at all.
+    let rebuildTimeoutId: ReturnType<typeof setTimeout>;
+    const scheduleRebuild = (delay: number) => {
+      clearTimeout(rebuildTimeoutId);
+      rebuildTimeoutId = setTimeout(() => {
         if (!cancelled) noteRegions = buildNoteIndex(osmd);
-      }, 300);
+      }, delay);
     };
+    const handleResize = () => scheduleRebuild(300);
+    const handleScroll = () => scheduleRebuild(100);
     window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    container.addEventListener('scroll', handleScroll, { passive: true });
 
     osmd
       .load(source)
@@ -119,8 +126,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
 
     return () => {
       cancelled = true;
-      clearTimeout(resizeTimeoutId);
+      clearTimeout(rebuildTimeoutId);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll);
+      container.removeEventListener('scroll', handleScroll);
       container.removeEventListener('pointerup', handlePointerUp);
       osmd.clear();
       container.innerHTML = '';
