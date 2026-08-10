@@ -19,3 +19,15 @@
   color: #d33;
   pointer-events: none;
 }
+
+/* Klavier's "realistic" preset marks an active key with a subtle gradient/shadow shift meant
+   to look like a physically depressed key -- correct, but too subtle to read as "this is the
+   note" at a glance, especially for one isolated key on a tablet screen. Layer an unmissable
+   outline on top, driven by the same .active class Klavier already applies, so tap-identified
+   and playing notes are obvious without touching Klavier's internals. */
+.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-white.active),
+.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-black.active) {
+  outline: 3px solid #ff5722;
+  outline-offset: -3px;
+  z-index: 2;
+}
