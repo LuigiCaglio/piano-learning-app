@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { buildNoteIndex, findNoteHitAtPoint, type NoteRegion } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
@@ -37,9 +37,6 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
   onMetronomeClicksReadyRef.current = onMetronomeClicksReady;
   const onLoadErrorRef = useRef(onLoadError);
   onLoadErrorRef.current = onLoadError;
-  // TEMPORARY diagnostic (remove once the real-device tap-to-identify issue is root-caused):
-  // surfaces what's actually happening on-screen so it can be read without device DevTools.
-  const [debugInfo, setDebugInfo] = useState('waiting for score to load...');
 
   useImperativeHandle(ref, () => ({
     advanceCursorTo(targetRealValue: number) {
@@ -94,23 +91,11 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // for every touch regardless of drift.
     const handlePointerUp = (event: PointerEvent) => {
       const hits = findNoteHitAtPoint(noteRegions, event.clientX, event.clientY);
-      setDebugInfo(
-        `pointerup type=${event.pointerType} @ (${Math.round(event.clientX)}, ${Math.round(event.clientY)}) | ` +
-          `regions=${noteRegions.length} | hit=${hits ? hits.map((h) => h.midi).join(',') : 'none'}`,
-      );
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
       }
     };
-    const handlePointerDown = (event: PointerEvent) => {
-      setDebugInfo(`pointerdown type=${event.pointerType} @ (${Math.round(event.clientX)}, ${Math.round(event.clientY)})`);
-    };
-    const handlePointerCancel = (event: PointerEvent) => {
-      setDebugInfo(`pointercancel type=${event.pointerType} -- browser claimed the gesture natively`);
-    };
-    container.addEventListener('pointerdown', handlePointerDown);
     container.addEventListener('pointerup', handlePointerUp);
-    container.addEventListener('pointercancel', handlePointerCancel);
 
     // Note regions are cached viewport-relative rects (getBoundingClientRect()), which go
     // stale whenever anything scrolls -- not just on OSMD's own autoResize re-renders (e.g.
@@ -136,7 +121,6 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
         if (cancelled) return;
         osmd.render();
         noteRegions = buildNoteIndex(osmd);
-        setDebugInfo(`score ready, ${noteRegions.length} tappable regions built -- tap a note`);
         // Cursor stays hidden until playback actually starts (see showCursor/hideCursor) --
         // otherwise it sits on the page looking like something is playing at all times.
         onScoreReadyRef.current?.(extractTimedNotes(osmd));
@@ -144,7 +128,6 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       })
       .catch((err: unknown) => {
         console.error('Failed to load/render score', err);
-        setDebugInfo(`LOAD ERROR: ${err instanceof Error ? err.message : String(err)}`);
         if (!cancelled) onLoadErrorRef.current?.('Could not read this score. It may not be a valid MusicXML file.');
       });
 
@@ -154,19 +137,12 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', handleScroll);
       container.removeEventListener('scroll', handleScroll);
-      container.removeEventListener('pointerdown', handlePointerDown);
       container.removeEventListener('pointerup', handlePointerUp);
-      container.removeEventListener('pointercancel', handlePointerCancel);
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
     };
   }, [source]);
 
-  return (
-    <>
-      <div ref={containerRef} className="score-viewer" />
-      <div className="score-viewer__debug">DEBUG: {debugInfo}</div>
-    </>
-  );
+  return <div ref={containerRef} className="score-viewer" />;
 });

@@ -5,27 +5,13 @@
   padding: 8px;
   overflow-x: auto;
   cursor: pointer;
-  /* A real finger tap drifts a bit in both directions, not just horizontally -- pan-y still
-     let the browser claim gestures with any vertical component, which is most of them, and
-     cancel the tap the same way manipulation/pan-x did. touch-action: none stops the browser
-     from claiming any touch gesture here at all, so every touch on the score reliably reaches
-     our own click handler regardless of drift. The one tradeoff: the page can no longer be
-     scrolled by a touch that starts inside the score specifically (there's plenty of page
-     outside it to scroll from instead). overflow-x:auto still covers desktop mice/trackpads,
-     which touch-action doesn't govern. */
+  /* A real finger tap drifts a bit in both directions, not just horizontally -- a lighter
+     touch-action (manipulation, pan-x, pan-y) still lets the browser claim gestures with a
+     matching movement component and cancel the tap. touch-action: none stops the browser from
+     claiming any touch gesture here at all, so our pointerup listener reliably fires for every
+     touch regardless of drift. The one tradeoff: the page can no longer be scrolled by a touch
+     that starts inside the score specifically (there's plenty of page outside it to scroll
+     from instead). overflow-x:auto still covers desktop mice/trackpads, which touch-action
+     doesn't govern. */
   touch-action: none;
-}
-
-/* TEMPORARY diagnostic panel -- remove once the real-device tap-to-identify issue is
-   root-caused. Deliberately loud styling so it's unmistakably a debug aid, not a real feature. */
-.score-viewer__debug {
-  margin-top: 6px;
-  padding: 8px 10px;
-  background: #fff3cd;
-  border: 1px solid #e0a800;
-  border-radius: 6px;
-  font-family: ui-monospace, Consolas, monospace;
-  font-size: 0.75rem;
-  color: #664d03;
-  word-break: break-word;
 }
