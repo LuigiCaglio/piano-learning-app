@@ -2,6 +2,11 @@ import type { GraphicalNote, OpenSheetMusicDisplay } from 'opensheetmusicdisplay
 
 export interface NoteHit {
   midi: number;
+  /** This note's position in the piece, in the same units OSMD's cursor iterator uses
+   * (CurrentEnrolledTimestamp.RealValue) -- lets a tap drive the score cursor to this exact
+   * spot via the same mechanism playback already uses, instead of only updating the piano
+   * keyboard below the score. */
+  timestampRealValue: number;
 }
 
 /** A tappable element on the rendered score: the SVG group for one chord/note stack (VexFlow
@@ -34,6 +39,7 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
       if (!measure) continue;
       const systemId = measure.ParentMusicSystem;
       for (const staffEntry of measure.staffEntries) {
+        const timestampRealValue = staffEntry.getAbsoluteTimestamp().RealValue;
         for (const voiceEntry of staffEntry.graphicalVoiceEntries) {
           for (const note of voiceEntry.notes) {
             const sourceNote = note.sourceNote;
@@ -49,7 +55,7 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
               noteByElement.set(svgG, entry);
               notes.push(entry);
             }
-            entry.hits.push({ midi });
+            entry.hits.push({ midi, timestampRealValue });
           }
         }
       }

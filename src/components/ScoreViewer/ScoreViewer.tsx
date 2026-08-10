@@ -12,12 +12,30 @@ interface ScoreViewerProps {
   onLoadError?: (message: string) => void;
 }
 
+/** Steps the OSMD cursor forward until it reaches (or passes) targetRealValue, resetting and
+ * fast-forwarding first if the target is earlier than the cursor's current position. Shared by
+ * playback's advanceCursorTo and tap-to-identify's own cursor placement below, so tapping a
+ * note moves the score cursor via literally the same mechanism playback already uses. */
+function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: number) {
+  if (cursor.iterator.CurrentEnrolledTimestamp.RealValue > targetRealValue) {
+    cursor.reset();
+  }
+  let guard = 0;
+  while (
+    !cursor.iterator.EndReached &&
+    cursor.iterator.CurrentEnrolledTimestamp.RealValue < targetRealValue &&
+    guard++ < 10000
+  ) {
+    cursor.next();
+  }
+}
+
 export interface ScoreViewerHandle {
   /** Advances (or, for an earlier target, resets and fast-forwards) the OSMD cursor to the
    * given enrolled-timestamp real value, so it tracks playback position ("bouncing ball"). */
   advanceCursorTo: (targetRealValue: number) => void;
-  /** Shows the score cursor. Only meant to be visible during active playback -- otherwise it
-   * sits on the page looking like something is playing when nothing is. */
+  /** Shows the score cursor. Used both to mark active playback and, internally to this
+   * component, to mark a tapped note's position -- exposed here only for the playback case. */
   showCursor: () => void;
   /** Hides the score cursor and resets it to the start, ready for the next playback. */
   hideCursor: () => void;
@@ -46,19 +64,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     advanceCursorTo(targetRealValue: number) {
       const cursor = osmdRef.current?.cursor;
       if (!cursor || cursor.Hidden) return;
-      // The cursor only moves forward via next(); a target earlier than its current
-      // position (e.g. a loop restarting) means we must reset and fast-forward again.
-      if (cursor.iterator.CurrentEnrolledTimestamp.RealValue > targetRealValue) {
-        cursor.reset();
-      }
-      let guard = 0;
-      while (
-        !cursor.iterator.EndReached &&
-        cursor.iterator.CurrentEnrolledTimestamp.RealValue < targetRealValue &&
-        guard++ < 10000
-      ) {
-        cursor.next();
-      }
+      stepCursorTo(cursor, targetRealValue);
     },
     showCursor() {
       osmdRef.current?.cursor.show();
@@ -97,6 +103,11 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       );
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits.map((hit) => hit.midi));
+        // Mark the tapped note's position on the score itself, via the exact same cursor
+        // mechanism playback uses -- previously a tap only updated the piano keyboard below
+        // the score, with nothing showing where the tap actually landed on the staff.
+        osmd.cursor.show();
+        stepCursorTo(osmd.cursor, hits[0].timestampRealValue);
       }
     };
     // Both click AND pointerup drive the same hit-test, deliberately redundant:
@@ -146,8 +157,9 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
         osmd.render();
         tappableNotes = buildNoteIndex(osmd);
         setDebugInfo(`score ready, ${tappableNotes.length} tappable regions built -- tap a note`);
-        // Cursor stays hidden until playback actually starts (see showCursor/hideCursor) --
-        // otherwise it sits on the page looking like something is playing at all times.
+        // Cursor stays hidden until playback starts or a note is tapped (see showCursor/
+        // hideCursor and handleTap above) -- otherwise it sits on the page looking like
+        // something is happening when nothing is.
         onScoreReadyRef.current?.(extractTimedNotes(osmd));
         onMetronomeClicksReadyRef.current?.(extractMetronomeClicks(osmd));
       })
