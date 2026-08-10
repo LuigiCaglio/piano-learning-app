@@ -47,4 +47,22 @@ test.describe('tap-to-identify', () => {
 
     await expect(page.locator('.note-readout')).toHaveText('C4');
   });
+
+  test('tapping still works correctly after the page has scrolled', async ({ page }) => {
+    // Note hit-regions are cached viewport-relative rects; a short viewport forces the page
+    // to actually scroll, which is exactly what goes stale without a scroll-triggered rebuild.
+    await page.setViewportSize({ width: 800, height: 500 });
+    await page.waitForTimeout(400); // let the resize-triggered rebuild settle
+
+    await page.evaluate(() => window.scrollTo(0, 150));
+    await page.waitForTimeout(200); // let the scroll-triggered rebuild settle
+
+    const notes = page.locator('.score-viewer svg g.vf-stavenote');
+    await notes.nth(0).click();
+    await expect(page.locator('.note-readout')).toHaveText('C4');
+
+    // Index 8 is the bass-clef chord -- confirms alignment holds elsewhere on the score too.
+    await notes.nth(8).click();
+    await expect(page.locator('.note-readout')).toHaveText('C3, E3, G3');
+  });
 });
