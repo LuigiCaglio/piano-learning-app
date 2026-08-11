@@ -13,8 +13,11 @@ test('key touch targets meet minimum size guidelines', async ({ page }) => {
   const playPause = await page.locator('.transport-controls__play-pause').boundingBox();
   expect(playPause?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
 
-  const importButton = await page.locator('.app-header button').boundingBox();
+  const importButton = await page.locator('.app-header button', { hasText: 'Import score' }).boundingBox();
   expect(importButton?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
+
+  const sampleToggle = await page.locator('.sample-library__toggle').boundingBox();
+  expect(sampleToggle?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
 
   const loopToggle = await page.locator('.loop-selector__toggle').boundingBox();
   expect(loopToggle?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);

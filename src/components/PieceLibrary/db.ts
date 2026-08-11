@@ -62,3 +62,16 @@ export function fileToPiece(file: File): Piece {
     fileType: inferFileType(file.name),
   };
 }
+
+/** Builds a Piece from an in-memory MusicXML string, for library entries that aren't a
+ * user-imported File -- currently only the bundled sample pieces (see data/samples). */
+export function stringToPiece(id: string, title: string, composer: string, xml: string): Piece {
+  return {
+    id,
+    title,
+    composer,
+    addedAt: Date.now(),
+    fileBlob: new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' }),
+    fileType: 'xml',
+  };
+}

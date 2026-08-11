@@ -16,6 +16,11 @@
   margin: 0;
 }
 
+.app-header__actions {
+  display: flex;
+  gap: 8px;
+}
+
 .app-header button {
   font-size: 0.9rem;
   min-height: 44px;
