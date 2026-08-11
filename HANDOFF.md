@@ -36,13 +36,15 @@ installed to the home screen on Android, fully close it (swipe from recent
 apps) before reopening, not just background it. Always re-check the footer
 hash after clearing, before concluding anything about a build.
 
-## Current status: awaiting tablet confirmation of this session's work
+## Current status: confirmed working, including on the tablet
 
 Everything below has been verified via the full automated suite (Vitest +
-Playwright, see Useful commands) and manually on desktop Chrome (once past
-the caching gotcha above), but **not yet confirmed on the user's actual
-Android tablet** — that's the next thing to check. Latest pushed build:
-`fe32b03`.
+Playwright, see Useful commands), manually on desktop Chrome, and now
+confirmed by the user on their actual Android tablet: tap highlight, cursor
+movement, whole-beat selection, hand filter, and tap-to-seek all work as
+intended. The temporary on-screen diagnostics (debug line under the score,
+uncaught-error banner, user-agent line) have been removed now that they've
+served their purpose.
 
 ### Resolved: the "tap doesn't highlight" mystery
 Original symptom: tapping a note never highlighted the matching piano key on
@@ -53,11 +55,10 @@ combinations). The investigation spanned most of a prior session; see git log
 around commits `4bfa1e8`..`b95a4d5` for the blow-by-blow if the root cause
 below ever turns out to be incomplete.
 
-**Actual root cause**, found by testing on desktop Chrome via the on-screen
-debug overlay (still present in the code, see below): the tap handler was
-working the whole time — `click` fired, the hit-test found the right note,
-`setActiveMidiNotes` ran. What was missing was *visible feedback*. Two
-compounding issues:
+**Actual root cause**, found by testing on desktop Chrome via a (since-removed)
+on-screen debug overlay: the tap handler was working the whole time —
+`click` fired, the hit-test found the right note, `setActiveMidiNotes` ran.
+What was missing was *visible feedback*. Two compounding issues:
 1. Klavier's "realistic" piano key preset (`node_modules/klavier/dist/realistic.mjs`)
    marks an active key with only a few-shades-darker gradient plus a
    drop-shadow — subtle by design (simulates a physically depressed key), not
@@ -72,12 +73,7 @@ compounding issues:
    shared with `advanceCursorTo` in `ScoreViewer.tsx` — literally the same
    mechanism, not a parallel implementation.
 
-Still-present temporary diagnostics (safe to remove once the tablet
-confirms all of this): the `DEBUG:` line under the score in
-`ScoreViewer.tsx` (last click/pointer event, hit-test result), the
-`navigator.userAgent` line and uncaught-error banner in `App.tsx`.
-
-### New this session: whole-beat tap + hand filter + tap-to-seek (build `fe32b03`)
+### New this session: whole-beat tap + hand filter + tap-to-seek
 Three related requests, all in `src/components/ScoreViewer/noteIndex.ts`,
 `ScoreViewer.tsx`, and `App.tsx`:
 1. Tapping in the empty gap between the treble and bass staff now selects
