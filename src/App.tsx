@@ -39,22 +39,6 @@ function App() {
   const [source, setSource] = useState<string | Blob>(demoScore);
   const [loadError, setLoadError] = useState<string | null>(null);
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
-  // TEMPORARY diagnostic (remove once the real-device tap-to-identify issue is root-caused):
-  // surfaces any uncaught error/rejection on-screen instead of only in a console nobody's
-  // watching on a tablet.
-  const [globalError, setGlobalError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onError = (event: ErrorEvent) => setGlobalError(`error: ${event.message}`);
-    const onRejection = (event: PromiseRejectionEvent) =>
-      setGlobalError(`unhandled rejection: ${String(event.reason)}`);
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
-    return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
-    };
-  }, []);
 
   // Playback only hears/schedules the selected hand's notes; everything else (the score
   // itself, the loop range, the follow-along cursor) still reflects the full piece.
@@ -171,11 +155,6 @@ function App() {
         <h1>Piano Learning</h1>
         <FileImporter onImported={handleImported} />
       </header>
-      {globalError && <div className="global-error">UNCAUGHT {globalError}</div>}
-      {/* TEMPORARY diagnostic (remove once the real-device tap-to-identify issue is
-          root-caused): answers "which Chrome/Android version is this?" without needing the
-          user to dig through device Settings. */}
-      <div className="global-error">UA: {navigator.userAgent}</div>
       <main>
         <PieceLibrary
           pieces={pieces}
