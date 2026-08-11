@@ -8,7 +8,9 @@ import { LoopSelector, type LoopRangeState } from './components/LoopSelector';
 import { HandSelector, type HandFilter } from './components/HandSelector';
 import { FileImporter } from './components/FileImporter';
 import { PieceLibrary } from './components/PieceLibrary/PieceLibrary';
-import { listPieces, touchPiece, type Piece } from './components/PieceLibrary/db';
+import { listPieces, savePiece, stringToPiece, touchPiece, type Piece } from './components/PieceLibrary/db';
+import { SampleLibrary } from './components/SampleLibrary/SampleLibrary';
+import { SAMPLE_PIECES, type SamplePiece } from './data/samples';
 import { usePlaybackEngine } from './playback/usePlaybackEngine';
 import { midiToNoteName } from './lib/midi';
 import {
@@ -128,6 +130,20 @@ function App() {
     openPiece(piece);
   };
 
+  // Sample pieces use a stable (not random) id, so re-selecting one that's already in the
+  // library just reopens that entry instead of piling up duplicates.
+  const handleSampleSelect = async (sample: SamplePiece) => {
+    const existing = pieces.find((p) => p.id === sample.id);
+    if (existing) {
+      openPiece(existing);
+      return;
+    }
+    const piece = stringToPiece(sample.id, sample.title, sample.composer, sample.xml);
+    await savePiece(piece);
+    setPieces((prev) => [piece, ...prev]);
+    openPiece(piece);
+  };
+
   const handleDeleted = (id: string) => {
     setPieces((prev) => prev.filter((p) => p.id !== id));
     if (id === currentPieceId) {
@@ -153,7 +169,10 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Piano Learning</h1>
-        <FileImporter onImported={handleImported} />
+        <div className="app-header__actions">
+          <SampleLibrary samples={SAMPLE_PIECES} onSelect={handleSampleSelect} />
+          <FileImporter onImported={handleImported} />
+        </div>
       </header>
       <main>
         <PieceLibrary
