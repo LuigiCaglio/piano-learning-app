@@ -1,7 +1,12 @@
-import type { GraphicalNote, OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import { Pitch, type GraphicalNote, type OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 
 export interface NoteHit {
   midi: number;
+  /** The note's actual spelled name as written in the score, e.g. "Eb4" or "D#4" -- these are
+   * the same piano key (same midi), but harmonically distinct, and a musician reading the score
+   * cares which one is written. Derived from the source Note's own Pitch, not recomputed from
+   * midi (which is spelling-blind: enharmonic pairs share one midi number). */
+  name: string;
   /** This note's position in the piece, in the same units OSMD's cursor iterator uses
    * (CurrentEnrolledTimestamp.RealValue) -- lets a tap drive the score cursor to this exact
    * spot via the same mechanism playback already uses, instead of only updating the piano
@@ -53,6 +58,10 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
             if (!svgG) continue;
 
             const midi = sourceNote.halfTone + 12;
+            // ToStringShort()'s default octave is OSMD's internal numbering, not the standard
+            // scientific-pitch-notation one MusicXML (and this app's midiToNoteName fallback)
+            // use -- OctaveXmlDifference is OSMD's own documented offset between the two.
+            const name = sourceNote.ToStringShort(Pitch.OctaveXmlDifference);
             const staffId = sourceNote.ParentStaff?.Id ?? 0;
             let entry = noteByElement.get(svgG);
             if (!entry) {
@@ -60,7 +69,7 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
               noteByElement.set(svgG, entry);
               notes.push(entry);
             }
-            entry.hits.push({ midi, timestampRealValue, staffId });
+            entry.hits.push({ midi, name, timestampRealValue, staffId });
           }
         }
       }

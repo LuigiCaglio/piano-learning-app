@@ -27,13 +27,16 @@ export class PlaybackEngine {
   private activeMidiNotes = new Set<number>();
   private endTimeoutId: ReturnType<typeof setTimeout> | undefined;
   private loop: { start: number; end: number } | null = null;
-  private onNoteOn?: (midi: number) => void;
+  // name is the note's actual spelled name as written in the score (e.g. "Eb4" vs "D#4") --
+  // see TimedNote.name; passed alongside midi so callers can display it without having to
+  // recompute a spelling from midi alone, which is enharmonically ambiguous.
+  private onNoteOn?: (midi: number, name: string) => void;
   private onNoteOff?: (midi: number) => void;
   private onPlaybackEnd?: () => void;
 
   constructor(options?: {
     onLoadProgress?: (progress: { loaded: number; total: number }) => void;
-    onNoteOn?: (midi: number) => void;
+    onNoteOn?: (midi: number, name: string) => void;
     onNoteOff?: (midi: number) => void;
     onPlaybackEnd?: () => void;
   }) {
@@ -203,6 +206,7 @@ export class PlaybackEngine {
       const time = audioAnchor + (note.startTime - offsetSeconds) / this.tempoRatio;
       const duration = note.duration / this.tempoRatio;
       const midi = note.midi;
+      const name = note.name;
       this.activeStopFns.push(
         this.piano.start({
           note: midi,
@@ -210,7 +214,7 @@ export class PlaybackEngine {
           duration,
           onStart: () => {
             this.activeMidiNotes.add(midi);
-            this.onNoteOn?.(midi);
+            this.onNoteOn?.(midi, name);
           },
           onEnded: () => {
             this.activeMidiNotes.delete(midi);

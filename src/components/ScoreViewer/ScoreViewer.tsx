@@ -168,23 +168,41 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // drift a real tap can have (see the "natural drift" regression test) so a genuine tap still
     // resolves as one, while an actual swipe -- typically 50px+ -- pans instead.
     const DRAG_THRESHOLD_PX = 24;
-    let activePointerId: number | null = null;
-    let pointerDownX = 0;
-    let dragStartScrollLeft = 0;
+    // Every currently-down pointer's last known position, keyed by pointerId -- a second finger
+    // joining (map size >= 2) means this gesture is unambiguously a scroll, not an attempt at a
+    // note, regardless of the single-finger threshold above or where the fingers land.
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let singleTouchStartX = 0;
+    let singleTouchStartScrollLeft = 0;
     let isDragScrolling = false;
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (event.pointerId !== activePointerId) return;
-      const dx = event.clientX - pointerDownX;
+      const last = activePointers.get(event.pointerId);
+      if (!last) return;
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+      if (activePointers.size >= 2) {
+        isDragScrolling = true;
+        // Drive the scroll from one consistent finger only -- applying every finger's own
+        // delta independently would sum them during a normal two-finger drag (both moving
+        // together), scrolling roughly twice as fast as intended.
+        const referencePointerId = Math.min(...activePointers.keys());
+        if (event.pointerId !== referencePointerId) return;
+        container.scrollLeft -= event.clientX - last.x;
+        window.scrollBy(0, -(event.clientY - last.y));
+        return;
+      }
+
+      const dx = event.clientX - singleTouchStartX;
       if (!isDragScrolling && Math.abs(dx) > DRAG_THRESHOLD_PX) {
         isDragScrolling = true;
       }
       if (isDragScrolling) {
-        container.scrollLeft = dragStartScrollLeft - dx;
+        container.scrollLeft = singleTouchStartScrollLeft - dx;
       }
     };
     const handlePointerUpOrCancel = (event: PointerEvent) => {
-      if (event.pointerId === activePointerId) activePointerId = null;
+      activePointers.delete(event.pointerId);
     };
 
     // Both click AND pointerup drive the same hit-test, deliberately redundant:
@@ -211,15 +229,18 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // Explicit pointer capture on pointerdown gives the browser the strongest possible signal
     // that JS owns this gesture, independent of whether it correctly honors touch-action: none
     // for gesture-claiming -- belt-and-suspenders alongside the CSS. Also starts this gesture's
-    // drag tracking; isDragScrolling is deliberately reset only here (not in the up handlers
-    // below), since click and pointerup both fire for the same released gesture and each needs
-    // to still see it.
+    // drag tracking; isDragScrolling is deliberately reset only for a fresh (first-finger)
+    // gesture, not in the up handlers below, since click and pointerup both fire for the same
+    // released gesture and each needs to still see it -- and not when a second finger joins an
+    // already-tracked gesture, which must never un-flag an in-progress scroll.
     const handlePointerDown = (event: PointerEvent) => {
       container.setPointerCapture(event.pointerId);
-      activePointerId = event.pointerId;
-      pointerDownX = event.clientX;
-      dragStartScrollLeft = container.scrollLeft;
-      isDragScrolling = false;
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointers.size === 1) {
+        singleTouchStartX = event.clientX;
+        singleTouchStartScrollLeft = container.scrollLeft;
+        isDragScrolling = false;
+      }
     };
     container.addEventListener('click', handleClick);
     container.addEventListener('pointerdown', handlePointerDown);

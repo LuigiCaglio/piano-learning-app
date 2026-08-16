@@ -1,7 +1,10 @@
-import { MusicPartManagerIterator, type Fraction, type OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import { MusicPartManagerIterator, Pitch, type Fraction, type OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 
 export interface TimedNote {
   midi: number;
+  /** The note's actual spelled name as written in the score, e.g. "Eb4" or "D#4" -- see
+   * NoteHit.name in noteIndex.ts for why this can't just be recomputed from midi. */
+  name: string;
   startTime: number;
   duration: number;
   measureNumber: number;
@@ -37,6 +40,8 @@ export function extractTimedNotes(osmd: OpenSheetMusicDisplay): TimedNote[] {
         if (note.isRest()) continue;
         notes.push({
           midi: note.halfTone + 12,
+          // See noteIndex.ts's identical call for why OctaveXmlDifference is needed here.
+          name: note.ToStringShort(Pitch.OctaveXmlDifference),
           startTime,
           duration: note.Length.RealValue * secondsPerWhole,
           measureNumber,

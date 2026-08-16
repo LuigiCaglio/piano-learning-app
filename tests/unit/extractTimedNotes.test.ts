@@ -20,6 +20,7 @@ function note(
 ): TimedNote {
   return {
     midi,
+    name: `N${midi}`, // placeholder -- these tests exercise timing/range logic, not spelling
     startTime,
     duration,
     measureNumber,

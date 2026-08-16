@@ -1,4 +1,5 @@
 import { PianoKeyboard } from '../PianoKeyboard/PianoKeyboard';
+import type { DisplayNote } from '../../lib/midi';
 import './NotePopup.css';
 
 interface NotePopupProps {
@@ -6,8 +7,7 @@ interface NotePopupProps {
    * used to anchor the popup near where the user actually touched, not some fixed spot. */
   x: number;
   y: number;
-  activeMidiNotes: number[];
-  noteNames: string;
+  activeNotes: DisplayNote[];
   showNoteNames?: boolean;
   highlightColor?: string;
   onClose: () => void;
@@ -24,7 +24,7 @@ const EDGE_MARGIN = 8;
  * note doesn't require scrolling all the way down to the keyboard fixed at the page bottom.
  * Flips above/below the tap point depending on which half of the viewport it landed in, so it
  * never renders off the top or bottom of the screen. */
-export function NotePopup({ x, y, activeMidiNotes, noteNames, showNoteNames, highlightColor, onClose }: NotePopupProps) {
+export function NotePopup({ x, y, activeNotes, showNoteNames, highlightColor, onClose }: NotePopupProps) {
   const opensBelow = y < window.innerHeight / 2;
   const clampedX = Math.min(Math.max(x, POPUP_HALF_WIDTH + EDGE_MARGIN), window.innerWidth - POPUP_HALF_WIDTH - EDGE_MARGIN);
 
@@ -37,12 +37,12 @@ export function NotePopup({ x, y, activeMidiNotes, noteNames, showNoteNames, hig
       }}
     >
       <div className="note-popup__header">
-        <span className="note-popup__label">{noteNames}</span>
+        <span className="note-popup__label">{activeNotes.map((n) => n.name).join(', ')}</span>
         <button type="button" className="note-popup__close" onClick={onClose} aria-label="Close">
           ×
         </button>
       </div>
-      <PianoKeyboard activeMidiNotes={activeMidiNotes} showNoteNames={showNoteNames} highlightColor={highlightColor} />
+      <PianoKeyboard activeNotes={activeNotes} showNoteNames={showNoteNames} highlightColor={highlightColor} />
     </div>
   );
 }
