@@ -8,6 +8,8 @@ interface NotePopupProps {
   y: number;
   activeMidiNotes: number[];
   noteNames: string;
+  showNoteNames?: boolean;
+  highlightColor?: string;
   onClose: () => void;
 }
 
@@ -22,7 +24,7 @@ const EDGE_MARGIN = 8;
  * note doesn't require scrolling all the way down to the keyboard fixed at the page bottom.
  * Flips above/below the tap point depending on which half of the viewport it landed in, so it
  * never renders off the top or bottom of the screen. */
-export function NotePopup({ x, y, activeMidiNotes, noteNames, onClose }: NotePopupProps) {
+export function NotePopup({ x, y, activeMidiNotes, noteNames, showNoteNames, highlightColor, onClose }: NotePopupProps) {
   const opensBelow = y < window.innerHeight / 2;
   const clampedX = Math.min(Math.max(x, POPUP_HALF_WIDTH + EDGE_MARGIN), window.innerWidth - POPUP_HALF_WIDTH - EDGE_MARGIN);
 
@@ -40,7 +42,7 @@ export function NotePopup({ x, y, activeMidiNotes, noteNames, onClose }: NotePop
           ×
         </button>
       </div>
-      <PianoKeyboard activeMidiNotes={activeMidiNotes} />
+      <PianoKeyboard activeMidiNotes={activeMidiNotes} showNoteNames={showNoteNames} highlightColor={highlightColor} />
     </div>
   );
 }

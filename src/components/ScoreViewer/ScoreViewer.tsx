@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import { CursorType, OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { buildNoteIndex, findNoteHitAtPoint, type NoteHit, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
 import './ScoreViewer.css';
@@ -10,6 +10,12 @@ interface ScoreViewerProps {
    * OSMD's normal paginated wrapping. Must be set before load(), so toggling this prop tears
    * down and reloads OSMD -- see the effect dependency array below. */
   singleLineView: boolean;
+  /** Recolors the score's own notation (noteheads, staff lines, text) for a dark page
+   * background -- OSMD's own built-in option for this, rather than trying to invert its output
+   * with a CSS filter. Like singleLineView, only takes effect on (re)load. */
+  darkMode: boolean;
+  /** Color of the score cursor that tracks playback/tap position (settings-configurable). */
+  cursorColor: string;
   /** Reports every note at the tapped beat, across all staves -- see findNoteHitAtPoint. A
    * caller that only wants one hand (e.g. a hand filter) should narrow this down itself via
    * NoteHit.staffId; this component has no notion of hand filtering. tapPoint is the raw
@@ -81,7 +87,7 @@ export interface ScoreViewerHandle {
 }
 
 export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(function ScoreViewer(
-  { source, singleLineView, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError },
+  { source, singleLineView, darkMode, cursorColor, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -122,6 +128,8 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       drawTitle: true,
       followCursor: true,
       renderSingleHorizontalStaffline: singleLineView,
+      darkMode,
+      cursorsOptions: [{ type: CursorType.Standard, color: cursorColor, alpha: 0.5, follow: true }],
     });
     osmdRef.current = osmd;
 
@@ -202,7 +210,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       container.innerHTML = '';
       osmdRef.current = null;
     };
-  }, [source, singleLineView]);
+  }, [source, singleLineView, darkMode, cursorColor]);
 
   return <div ref={containerRef} className="score-viewer" />;
 });

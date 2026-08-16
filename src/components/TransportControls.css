@@ -1,7 +1,7 @@
 .transport-controls {
   margin: 16px 0;
   padding: 12px;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 8px;
 }
 
@@ -18,13 +18,13 @@
   padding: 10px 24px;
   border-radius: 6px;
   border: none;
-  background: #2f7a3d;
-  color: white;
+  background: var(--accent);
+  color: var(--accent-contrast);
   cursor: pointer;
 }
 
 .transport-controls__play-pause:disabled {
-  background: #9aa19b;
+  background: var(--border-strong);
   cursor: not-allowed;
 }
 
@@ -47,14 +47,14 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #2f7a3d;
+  background: var(--accent);
   cursor: pointer;
   margin-top: -11px;
 }
 
 .transport-controls__tempo input[type='range']::-webkit-slider-runnable-track {
   height: 4px;
-  background: #ccc;
+  background: var(--border-strong);
   border-radius: 2px;
 }
 
@@ -62,14 +62,14 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: #2f7a3d;
+  background: var(--accent);
   border: none;
   cursor: pointer;
 }
 
 .transport-controls__tempo input[type='range']::-moz-range-track {
   height: 4px;
-  background: #ccc;
+  background: var(--border-strong);
   border-radius: 2px;
 }
 
@@ -93,5 +93,5 @@
 .transport-controls__error {
   margin-top: 10px;
   font-size: 0.8rem;
-  color: #a12f26;
+  color: var(--danger);
 }

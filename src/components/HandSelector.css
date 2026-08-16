@@ -3,7 +3,7 @@
   gap: 6px;
   margin: 0 0 16px;
   padding: 6px;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 10px;
 }
 
@@ -14,13 +14,13 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #333;
+  color: var(--text);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .hand-selector__option--active {
-  background: #2f7a3d;
-  color: white;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
