@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findNoteHitAtPoint, type TappableNote } from '../../src/components/ScoreViewer/noteIndex.js';
+import { findNoteHitAtPoint, getSystemOrder, type TappableNote } from '../../src/components/ScoreViewer/noteIndex.js';
 
 /** A fake SVG element whose getBoundingClientRect() is queried live, matching the real
  * findNoteHitAtPoint contract -- catches any regression back to reading a cached rect.
@@ -172,5 +172,32 @@ describe('findNoteHitAtPoint', () => {
       // Close enough (within default 20px tolerance) to the second note directly.
       expect(findNoteHitAtPoint(notes, 305, 215)).toEqual([{ midi: 60, name: 'N60', timestampRealValue: 300, staffId: 1 }]);
     });
+  });
+});
+
+describe('getSystemOrder', () => {
+  it('returns an empty list for no notes', () => {
+    expect(getSystemOrder([])).toEqual([]);
+  });
+
+  it('returns each distinct system once, in first-encountered order', () => {
+    const notes = [
+      note([60], 0, 0, 10, 10, { systemId: 'a' }),
+      note([64], 20, 0, 30, 10, { systemId: 'a' }), // same system as the first -- not a duplicate entry
+      note([48], 0, 300, 10, 310, { systemId: 'b' }),
+      note([72], 0, 600, 10, 610, { systemId: 'c' }),
+    ];
+    expect(getSystemOrder(notes)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not reorder if a system reappears out of sequence in the input', () => {
+    // Notes aren't necessarily perfectly sorted by system when this is called -- the order
+    // returned should still reflect first appearance, not a later one.
+    const notes = [
+      note([60], 0, 0, 10, 10, { systemId: 'a' }),
+      note([48], 0, 300, 10, 310, { systemId: 'b' }),
+      note([64], 20, 0, 30, 10, { systemId: 'a' }),
+    ];
+    expect(getSystemOrder(notes)).toEqual(['a', 'b']);
   });
 });

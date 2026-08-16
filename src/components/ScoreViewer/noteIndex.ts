@@ -79,6 +79,23 @@ export function buildNoteIndex(osmd: OpenSheetMusicDisplay): TappableNote[] {
   return notes;
 }
 
+/** Every distinct system (line of music) in `notes`, in first-encountered order -- top-to-bottom,
+ * since that's buildNoteIndex's own traversal order. Used to group systems into "pages" for
+ * jump-to-page navigation (see PageSelector/ScoreViewer.scrollToPage): grouping by system rather
+ * than a pixel-height guess stays correct regardless of zoom, viewport width, or how tall any
+ * given system happens to render. */
+export function getSystemOrder(notes: TappableNote[]): unknown[] {
+  const seen = new Set<unknown>();
+  const order: unknown[] = [];
+  for (const note of notes) {
+    if (!seen.has(note.systemId)) {
+      seen.add(note.systemId);
+      order.push(note.systemId);
+    }
+  }
+  return order;
+}
+
 /** Finds every note at the beat nearest a tap point -- across every staff, not just whichever
  * one is literally under the fingertip. Identifying a note is about "what's happening at this
  * beat" (the whole two-hand chord), not just the single notehead nearest the tap; callers that

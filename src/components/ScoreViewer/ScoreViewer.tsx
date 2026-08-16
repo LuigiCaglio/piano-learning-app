@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { CursorType, OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { buildNoteIndex, findNoteHitAtPoint, type NoteHit, type TappableNote } from './noteIndex';
+import { buildNoteIndex, findNoteHitAtPoint, getSystemOrder, type NoteHit, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
 import './ScoreViewer.css';
 
@@ -26,7 +26,15 @@ interface ScoreViewerProps {
   onScoreReady?: (timedNotes: TimedNote[]) => void;
   onMetronomeClicksReady?: (clicks: MetronomeClick[]) => void;
   onLoadError?: (message: string) => void;
+  /** Number of jump-to-page pages the score currently groups into -- see scrollToPage below.
+   * Fires whenever the underlying system layout changes (load, resize). */
+  onPageCountReady?: (pageCount: number) => void;
 }
+
+/** How many systems (lines of music) count as one "page" for jump-to-page navigation. Not a
+ * real page break (see the PageSelector doc comment for why) -- just a grouping size roughly
+ * matching how many lines a real printed page tends to show. */
+const SYSTEMS_PER_PAGE = 4;
 
 /** Steps the OSMD cursor forward until it reaches (or passes) targetRealValue, resetting and
  * fast-forwarding first if the target is earlier than the cursor's current position. Shared by
@@ -93,14 +101,22 @@ export interface ScoreViewerHandle {
   showCursor: () => void;
   /** Hides the score cursor and resets it to the start, ready for the next playback. */
   hideCursor: () => void;
+  /** Scrolls so the given page (0-indexed, grouping SYSTEMS_PER_PAGE systems each) starts at
+   * the top of the viewport. A no-op if pageIndex is out of range for the current score. */
+  scrollToPage: (pageIndex: number) => void;
 }
 
 export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(function ScoreViewer(
-  { source, singleLineView, darkMode, cursorColor, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError },
+  { source, singleLineView, darkMode, cursorColor, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError, onPageCountReady },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
+  // Rebuilt on load and on resize (see the effect below); a ref rather than a local closure
+  // variable so scrollToPage, exposed via the imperative handle below, always reads whatever
+  // was most recently built instead of a stale snapshot from whenever the effect last ran.
+  const tappableNotesRef = useRef<TappableNote[]>([]);
+  const systemOrderRef = useRef<unknown[]>([]);
   const onNoteTapRef = useRef(onNoteTap);
   onNoteTapRef.current = onNoteTap;
   const onScoreReadyRef = useRef(onScoreReady);
@@ -109,6 +125,8 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
   onMetronomeClicksReadyRef.current = onMetronomeClicksReady;
   const onLoadErrorRef = useRef(onLoadError);
   onLoadErrorRef.current = onLoadError;
+  const onPageCountReadyRef = useRef(onPageCountReady);
+  onPageCountReadyRef.current = onPageCountReady;
 
   useImperativeHandle(ref, () => ({
     advanceCursorTo(targetRealValue: number) {
@@ -124,6 +142,12 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       if (!cursor) return;
       cursor.hide();
       cursor.reset();
+    },
+    scrollToPage(pageIndex: number) {
+      const systemId = systemOrderRef.current[pageIndex * SYSTEMS_PER_PAGE];
+      if (systemId === undefined) return;
+      const target = tappableNotesRef.current.find((n) => n.systemId === systemId);
+      target?.element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
   }));
 
@@ -143,13 +167,19 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     osmdRef.current = osmd;
 
     let cancelled = false;
-    // Which SVG element belongs to which note(s) -- stable across scroll/layout shifts, only
-    // rebuilt when OSMD actually re-renders (autoResize) and replaces the SVG elements
-    // themselves. Screen position is deliberately NOT stored here; see findNoteHitAtPoint.
-    let tappableNotes: TappableNote[] = [];
+    // Rebuilds both the tap hit-test index and the page-navigation system order together --
+    // they're derived from the same OSMD traversal and go stale at the same times (initial
+    // render, and any autoResize-triggered re-layout that replaces the SVG elements).
+    const rebuildNoteIndex = () => {
+      const notes = buildNoteIndex(osmd);
+      tappableNotesRef.current = notes;
+      systemOrderRef.current = getSystemOrder(notes);
+      const pageCount = Math.max(1, Math.ceil(systemOrderRef.current.length / SYSTEMS_PER_PAGE));
+      onPageCountReadyRef.current?.(pageCount);
+    };
 
     const handleTap = (clientX: number, clientY: number) => {
-      const hits = findNoteHitAtPoint(tappableNotes, clientX, clientY);
+      const hits = findNoteHitAtPoint(tappableNotesRef.current, clientX, clientY);
       if (hits && hits.length > 0) {
         onNoteTapRef.current?.(hits, { x: clientX, y: clientY });
         // Mark the tapped note's position on the score itself, via the exact same cursor
@@ -252,7 +282,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     const handleResize = () => {
       clearTimeout(resizeTimeoutId);
       resizeTimeoutId = setTimeout(() => {
-        if (!cancelled) tappableNotes = buildNoteIndex(osmd);
+        if (!cancelled) rebuildNoteIndex();
       }, 300);
     };
     window.addEventListener('resize', handleResize);
@@ -262,7 +292,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       .then(() => {
         if (cancelled) return;
         osmd.render();
-        tappableNotes = buildNoteIndex(osmd);
+        rebuildNoteIndex();
         // Cursor stays hidden until playback starts or a note is tapped (see showCursor/
         // hideCursor and handleTap above) -- otherwise it sits on the page looking like
         // something is happening when nothing is.
