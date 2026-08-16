@@ -9,6 +9,7 @@ import { useSettings } from './settings/useSettings';
 import { TransportControls } from './components/TransportControls';
 import { LoopSelector, type LoopRangeState } from './components/LoopSelector';
 import { HandSelector, type HandFilter } from './components/HandSelector';
+import { PageSelector } from './components/PageSelector';
 import { FileImporter } from './components/FileImporter';
 import { PieceLibrary } from './components/PieceLibrary/PieceLibrary';
 import { listPieces, savePiece, stringToPiece, touchPiece, type Piece } from './components/PieceLibrary/db';
@@ -57,6 +58,9 @@ function App() {
   // reachable without scrolling, even on a short landscape viewport -- but showing every control
   // all the time would eat too much of that same limited height, defeating the point.
   const [controlsExpanded, setControlsExpanded] = useState(false);
+  // Full-score-only jump-to-page navigation (see ScoreViewer.scrollToPage/PageSelector);
+  // reported by ScoreViewer since it's the one that knows the score's actual system layout.
+  const [pageCount, setPageCount] = useState(1);
   const { settings, updateSettings } = useSettings();
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
   const practiceBarRef = useRef<HTMLDivElement>(null);
@@ -270,6 +274,7 @@ function App() {
           onScoreReady={setTimedNotes}
           onMetronomeClicksReady={setMetronomeClicks}
           onLoadError={setLoadError}
+          onPageCountReady={setPageCount}
         />
         {!singleLineView && notePopup && (
           <NotePopup
@@ -297,6 +302,9 @@ function App() {
               <input type="checkbox" checked={playNoteOnTap} onChange={(e) => setPlayNoteOnTap(e.target.checked)} />
               Play sound on tap
             </label>
+            {!singleLineView && pageCount > 1 && (
+              <PageSelector pageCount={pageCount} onJump={(pageIndex) => scoreViewerRef.current?.scrollToPage(pageIndex)} />
+            )}
             {hasMultipleStaves && <HandSelector value={handFilter} onChange={setHandFilter} />}
             {measureRange && (
               <LoopSelector
