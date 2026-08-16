@@ -62,6 +62,10 @@ export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: Metr
     setIsPlaying(false);
   };
 
+  const previewNotes = (midiNotes: number[]) => {
+    engineRef.current?.previewNotes(midiNotes);
+  };
+
   const setTempoRatio = (ratio: number) => {
     engineRef.current?.setTempoRatio(ratio);
     setTempoRatioState(ratio);
@@ -81,6 +85,7 @@ export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: Metr
     metronomeEnabled,
     play,
     pause,
+    previewNotes,
     setTempoRatio,
     setMetronomeEnabled,
     engine: engineRef.current,

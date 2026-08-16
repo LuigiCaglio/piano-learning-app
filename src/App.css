@@ -66,6 +66,23 @@
   color: white;
 }
 
+.tap-sound-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tap-sound-toggle input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
 .load-error {
   margin: 0 0 16px;
   padding: 10px 14px;

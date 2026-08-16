@@ -1,0 +1,34 @@
+.note-popup {
+  position: fixed;
+  z-index: 20;
+  width: min(90vw, 340px);
+  transform: translateX(-50%);
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  padding: 8px 10px 10px;
+}
+
+.note-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.note-popup__label {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.note-popup__close {
+  min-width: 32px;
+  min-height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: #f0f0f0;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}

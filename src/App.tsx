@@ -3,6 +3,7 @@ import demoScore from './data/demo.musicxml?raw';
 import { ScoreViewer, type ScoreViewerHandle } from './components/ScoreViewer/ScoreViewer';
 import type { NoteHit } from './components/ScoreViewer/noteIndex';
 import { PianoKeyboard } from './components/PianoKeyboard/PianoKeyboard';
+import { NotePopup } from './components/NotePopup/NotePopup';
 import { TransportControls } from './components/TransportControls';
 import { LoopSelector, type LoopRangeState } from './components/LoopSelector';
 import { HandSelector, type HandFilter } from './components/HandSelector';
@@ -44,6 +45,10 @@ function App() {
   // than the viewport, pushing the piano keyboard below the fold. Kept as a toggle (not the only
   // option) since a full multi-line view is still useful for getting a sense of the whole piece.
   const [singleLineView, setSingleLineView] = useState(true);
+  // Where to float the note-preview keyboard popup (full-score view only -- see handleNoteTap
+  // and the render below); null when nothing's been tapped yet or the popup's been closed.
+  const [notePopup, setNotePopup] = useState<{ x: number; y: number } | null>(null);
+  const [playNoteOnTap, setPlayNoteOnTap] = useState(true);
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
 
   // Playback only hears/schedules the selected hand's notes; everything else (the score
@@ -64,6 +69,7 @@ function App() {
     metronomeEnabled,
     play,
     pause,
+    previewNotes,
     setTempoRatio,
     setMetronomeEnabled,
     engine,
@@ -82,7 +88,14 @@ function App() {
       setLoopRange({ startMeasure: range.min, endMeasure: range.max, enabled: false });
     }
     setHandFilter('both');
+    setNotePopup(null);
   }, [timedNotes]);
+
+  // The popup is full-score-only (see handleNoteTap); close a stale one left open from before
+  // switching to scroll view, rather than have it linger there uselessly.
+  useEffect(() => {
+    if (singleLineView) setNotePopup(null);
+  }, [singleLineView]);
 
   useEffect(() => {
     if (!engine) return;
@@ -161,12 +174,20 @@ function App() {
   // instead of always the beginning -- uses timedNotes (the full, hand-unfiltered list) for
   // that lookup since the seek target is a point in time, independent of which hand is
   // currently audible.
-  const handleNoteTap = (hits: NoteHit[]) => {
+  const handleNoteTap = (hits: NoteHit[], tapPoint: { x: number; y: number }) => {
     const targetStaff = handFilter === 'right' ? STAFF_ID_RIGHT_HAND : handFilter === 'left' ? STAFF_ID_LEFT_HAND : null;
     const filtered = targetStaff === null ? hits : hits.filter((hit) => hit.staffId === targetStaff);
-    setActiveMidiNotes(filtered.map((hit) => hit.midi));
+    const midiNotes = filtered.map((hit) => hit.midi);
+    setActiveMidiNotes(midiNotes);
     const time = findTimeAtTimestamp(timedNotes, hits[0].timestampRealValue);
     if (time !== null) engine?.seek(time);
+    // The popup is only useful in full-score view -- in scroll view the fixed keyboard below
+    // is already always on screen, so a floating copy would just be redundant.
+    if (!singleLineView) setNotePopup(tapPoint);
+    // Skip during active playback: the piece is already sounding, so an extra, out-of-time copy
+    // of the tapped note would layer confusingly on top of it (PlaybackEngine.previewNotes also
+    // guards this itself, but checking here avoids even attempting it).
+    if (playNoteOnTap && !isPlaying && isReady) previewNotes(midiNotes);
   };
 
   return (
@@ -217,11 +238,24 @@ function App() {
           onMetronomeClicksReady={setMetronomeClicks}
           onLoadError={setLoadError}
         />
+        {!singleLineView && notePopup && (
+          <NotePopup
+            x={notePopup.x}
+            y={notePopup.y}
+            activeMidiNotes={displayedMidiNotes}
+            noteNames={displayedMidiNotes.map(midiToNoteName).join(', ')}
+            onClose={() => setNotePopup(null)}
+          />
+        )}
         <div className="note-readout">
           {displayedMidiNotes.length > 0
             ? displayedMidiNotes.map(midiToNoteName).join(', ')
             : 'Tap a note or chord above'}
         </div>
+        <label className="tap-sound-toggle">
+          <input type="checkbox" checked={playNoteOnTap} onChange={(e) => setPlayNoteOnTap(e.target.checked)} />
+          Play sound on tap
+        </label>
         <PianoKeyboard activeMidiNotes={displayedMidiNotes} />
         {hasMultipleStaves && <HandSelector value={handFilter} onChange={setHandFilter} />}
         {measureRange && (

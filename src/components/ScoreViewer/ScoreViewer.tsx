@@ -12,8 +12,11 @@ interface ScoreViewerProps {
   singleLineView: boolean;
   /** Reports every note at the tapped beat, across all staves -- see findNoteHitAtPoint. A
    * caller that only wants one hand (e.g. a hand filter) should narrow this down itself via
-   * NoteHit.staffId; this component has no notion of hand filtering. */
-  onNoteTap?: (hits: NoteHit[]) => void;
+   * NoteHit.staffId; this component has no notion of hand filtering. tapPoint is the raw
+   * viewport coordinates of the tap itself (not the matched note's exact position), for a
+   * caller that wants to anchor something -- e.g. a floating popup -- near where the user
+   * actually touched. */
+  onNoteTap?: (hits: NoteHit[], tapPoint: { x: number; y: number }) => void;
   onScoreReady?: (timedNotes: TimedNote[]) => void;
   onMetronomeClicksReady?: (clicks: MetronomeClick[]) => void;
   onLoadError?: (message: string) => void;
@@ -31,8 +34,18 @@ interface ScoreViewerProps {
  * imported piece (hundreds+ of notes, not the handful in the built-in demo) from the start
  * could mean thousands of synchronous, unbatched DOM updates for a single tap. The iterator
  * alone does no DOM work, so the loop here is pure bookkeeping; cursor.update() then syncs the
- * visual position once, at the final spot, instead of at every intermediate one. */
-function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: number): boolean {
+ * visual position once, at the final spot, instead of at every intermediate one.
+ *
+ * scrollBehavior defaults to smooth (a nice one-off glide for a deliberate tap), but playback's
+ * follow-along passes 'auto': it calls this on every animation frame, and re-triggering a CSS
+ * smooth-scroll that often means each new scroll interrupts the last one before it finishes,
+ * which is what made the auto-scroll visibly lag behind the audio. An instant re-snap every
+ * frame already looks smooth on its own, since it's happening ~60 times a second. */
+function stepCursorTo(
+  cursor: OpenSheetMusicDisplay['cursor'],
+  targetRealValue: number,
+  scrollBehavior: ScrollBehavior = 'smooth',
+): boolean {
   let moved = false;
   if (cursor.iterator.CurrentEnrolledTimestamp.RealValue > targetRealValue) {
     cursor.reset();
@@ -51,7 +64,7 @@ function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: 
     cursor.update();
     // In single-line view the score can be much wider than the viewport, so keep the cursor
     // horizontally in view the same way it's always been vertically in view.
-    cursor.cursorElement?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    cursor.cursorElement?.scrollIntoView({ behavior: scrollBehavior, inline: 'center', block: 'nearest' });
   }
   return moved;
 }
@@ -86,7 +99,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     advanceCursorTo(targetRealValue: number) {
       const cursor = osmdRef.current?.cursor;
       if (!cursor || cursor.Hidden) return;
-      stepCursorTo(cursor, targetRealValue);
+      stepCursorTo(cursor, targetRealValue, 'auto');
     },
     showCursor() {
       osmdRef.current?.cursor.show();
@@ -121,7 +134,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     const handleTap = (clientX: number, clientY: number) => {
       const hits = findNoteHitAtPoint(tappableNotes, clientX, clientY);
       if (hits && hits.length > 0) {
-        onNoteTapRef.current?.(hits);
+        onNoteTapRef.current?.(hits, { x: clientX, y: clientY });
         // Mark the tapped note's position on the score itself, via the exact same cursor
         // mechanism playback uses -- previously a tap only updated the piano keyboard below
         // the score, with nothing showing where the tap actually landed on the staff.
