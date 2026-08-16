@@ -106,6 +106,18 @@ export class PlaybackEngine {
     this.scheduleFrom(this.startOffsetSeconds);
   }
 
+  /** Plays the given notes once, immediately, independent of the scheduled timeline -- used to
+   * preview a tapped note's sound. No-ops during normal playback so a tap doesn't layer an
+   * extra, out-of-time copy of the note on top of what's already sounding. */
+  async previewNotes(midiNotes: number[], durationSeconds = 0.8): Promise<void> {
+    if (this.playing || midiNotes.length === 0) return;
+    await this.context.resume();
+    const time = this.context.currentTime;
+    for (const midi of midiNotes) {
+      this.piano.start({ note: midi, time, duration: durationSeconds });
+    }
+  }
+
   pause(): void {
     if (!this.playing) return;
     this.startOffsetSeconds = this.currentTime();
