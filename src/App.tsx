@@ -15,7 +15,7 @@ import { listPieces, savePiece, stringToPiece, touchPiece, type Piece } from './
 import { SampleLibrary } from './components/SampleLibrary/SampleLibrary';
 import { SAMPLE_PIECES, type SamplePiece } from './data/samples';
 import { usePlaybackEngine } from './playback/usePlaybackEngine';
-import { midiToNoteName } from './lib/midi';
+import type { DisplayNote } from './lib/midi';
 import {
   findTimeAtTimestamp,
   findTimestampAtTime,
@@ -30,7 +30,7 @@ const STAFF_ID_RIGHT_HAND = 1;
 const STAFF_ID_LEFT_HAND = 2;
 
 function App() {
-  const [activeMidiNotes, setActiveMidiNotes] = useState<number[]>([]);
+  const [activeNotes, setActiveNotes] = useState<DisplayNote[]>([]);
   const [timedNotes, setTimedNotes] = useState<TimedNote[]>([]);
   const [metronomeClicks, setMetronomeClicks] = useState<MetronomeClick[]>([]);
   const [loopRange, setLoopRange] = useState<LoopRangeState>({
@@ -87,7 +87,7 @@ function App() {
     isReady,
     isPlaying,
     tempoRatio,
-    playingMidiNotes,
+    playingNotes,
     audioError,
     metronomeEnabled,
     play,
@@ -97,7 +97,7 @@ function App() {
     setMetronomeEnabled,
     engine,
   } = usePlaybackEngine(playableNotes, metronomeClicks);
-  const displayedMidiNotes = isPlaying ? playingMidiNotes : activeMidiNotes;
+  const displayedNotes = isPlaying ? playingNotes : activeNotes;
   const measureRange = getMeasureRange(timedNotes);
 
   useEffect(() => {
@@ -200,8 +200,8 @@ function App() {
   const handleNoteTap = (hits: NoteHit[], tapPoint: { x: number; y: number }) => {
     const targetStaff = handFilter === 'right' ? STAFF_ID_RIGHT_HAND : handFilter === 'left' ? STAFF_ID_LEFT_HAND : null;
     const filtered = targetStaff === null ? hits : hits.filter((hit) => hit.staffId === targetStaff);
-    const midiNotes = filtered.map((hit) => hit.midi);
-    setActiveMidiNotes(midiNotes);
+    const notes = filtered.map((hit) => ({ midi: hit.midi, name: hit.name }));
+    setActiveNotes(notes);
     const time = findTimeAtTimestamp(timedNotes, hits[0].timestampRealValue);
     if (time !== null) engine?.seek(time);
     // The popup is only useful in full-score view -- in scroll view the fixed keyboard below
@@ -210,7 +210,7 @@ function App() {
     // Skip during active playback: the piece is already sounding, so an extra, out-of-time copy
     // of the tapped note would layer confusingly on top of it (PlaybackEngine.previewNotes also
     // guards this itself, but checking here avoids even attempting it).
-    if (playNoteOnTap && !isPlaying && isReady) previewNotes(midiNotes);
+    if (playNoteOnTap && !isPlaying && isReady) previewNotes(notes.map((n) => n.midi));
   };
 
   return (
@@ -275,8 +275,7 @@ function App() {
           <NotePopup
             x={notePopup.x}
             y={notePopup.y}
-            activeMidiNotes={displayedMidiNotes}
-            noteNames={displayedMidiNotes.map(midiToNoteName).join(', ')}
+            activeNotes={displayedNotes}
             showNoteNames={settings.showNoteNames}
             highlightColor={settings.keyHighlightColor}
             onClose={() => setNotePopup(null)}
@@ -326,13 +325,13 @@ function App() {
             {isPlaying ? 'Pause' : 'Play'}
           </button>
           <div className="note-readout">
-            {displayedMidiNotes.length > 0
-              ? displayedMidiNotes.map(midiToNoteName).join(', ')
+            {displayedNotes.length > 0
+              ? displayedNotes.map((n) => n.name).join(', ')
               : 'Tap a note or chord above'}
           </div>
         </div>
         <PianoKeyboard
-          activeMidiNotes={displayedMidiNotes}
+          activeNotes={displayedNotes}
           showNoteNames={settings.showNoteNames}
           highlightColor={settings.keyHighlightColor}
         />
