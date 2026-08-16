@@ -6,6 +6,10 @@ import './ScoreViewer.css';
 
 interface ScoreViewerProps {
   source: string | Blob;
+  /** Render the whole piece as a single horizontal staff line (scrolls sideways) instead of
+   * OSMD's normal paginated wrapping. Must be set before load(), so toggling this prop tears
+   * down and reloads OSMD -- see the effect dependency array below. */
+  singleLineView: boolean;
   /** Reports every note at the tapped beat, across all staves -- see findNoteHitAtPoint. A
    * caller that only wants one hand (e.g. a hand filter) should narrow this down itself via
    * NoteHit.staffId; this component has no notion of hand filtering. */
@@ -18,10 +22,21 @@ interface ScoreViewerProps {
 /** Steps the OSMD cursor forward until it reaches (or passes) targetRealValue, resetting and
  * fast-forwarding first if the target is earlier than the cursor's current position. Shared by
  * playback's advanceCursorTo and tap-to-identify's own cursor placement below, so tapping a
- * note moves the score cursor via literally the same mechanism playback already uses. */
-function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: number) {
+ * note moves the score cursor via literally the same mechanism playback already uses. Returns
+ * whether the cursor actually moved, so callers can scroll it into view only when needed.
+ *
+ * Advances cursor.iterator directly rather than calling cursor.next() in the loop: next() also
+ * repositions the cursor's DOM element on every single step, which is right for playback (one
+ * step per animation frame) but was freezing the tab on tap-to-seek -- jumping into a real
+ * imported piece (hundreds+ of notes, not the handful in the built-in demo) from the start
+ * could mean thousands of synchronous, unbatched DOM updates for a single tap. The iterator
+ * alone does no DOM work, so the loop here is pure bookkeeping; cursor.update() then syncs the
+ * visual position once, at the final spot, instead of at every intermediate one. */
+function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: number): boolean {
+  let moved = false;
   if (cursor.iterator.CurrentEnrolledTimestamp.RealValue > targetRealValue) {
     cursor.reset();
+    moved = true;
   }
   let guard = 0;
   while (
@@ -29,8 +44,16 @@ function stepCursorTo(cursor: OpenSheetMusicDisplay['cursor'], targetRealValue: 
     cursor.iterator.CurrentEnrolledTimestamp.RealValue < targetRealValue &&
     guard++ < 10000
   ) {
-    cursor.next();
+    cursor.iterator.moveToNext();
+    moved = true;
   }
+  if (moved) {
+    cursor.update();
+    // In single-line view the score can be much wider than the viewport, so keep the cursor
+    // horizontally in view the same way it's always been vertically in view.
+    cursor.cursorElement?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }
+  return moved;
 }
 
 export interface ScoreViewerHandle {
@@ -45,7 +68,7 @@ export interface ScoreViewerHandle {
 }
 
 export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(function ScoreViewer(
-  { source, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError },
+  { source, singleLineView, onNoteTap, onScoreReady, onMetronomeClicksReady, onLoadError },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +108,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       backend: 'svg',
       drawTitle: true,
       followCursor: true,
+      renderSingleHorizontalStaffline: singleLineView,
     });
     osmdRef.current = osmd;
 
@@ -165,7 +189,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       container.innerHTML = '';
       osmdRef.current = null;
     };
-  }, [source]);
+  }, [source, singleLineView]);
 
   return <div ref={containerRef} className="score-viewer" />;
 });

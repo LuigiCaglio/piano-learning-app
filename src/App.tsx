@@ -40,6 +40,10 @@ function App() {
   const [currentPieceId, setCurrentPieceId] = useState<string | null>(null);
   const [source, setSource] = useState<string | Blob>(demoScore);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Default to the scrolling single-line layout: a multi-system score otherwise renders taller
+  // than the viewport, pushing the piano keyboard below the fold. Kept as a toggle (not the only
+  // option) since a full multi-line view is still useful for getting a sense of the whole piece.
+  const [singleLineView, setSingleLineView] = useState(true);
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
 
   // Playback only hears/schedules the selected hand's notes; everything else (the score
@@ -182,9 +186,32 @@ function App() {
           onDeleted={handleDeleted}
         />
         {loadError && <div className="load-error">{loadError}</div>}
+        <div className="score-view-toggle" role="radiogroup" aria-label="Score layout">
+          <button
+            type="button"
+            className={
+              singleLineView ? 'score-view-toggle__option score-view-toggle__option--active' : 'score-view-toggle__option'
+            }
+            aria-pressed={singleLineView}
+            onClick={() => setSingleLineView(true)}
+          >
+            Scroll (one line)
+          </button>
+          <button
+            type="button"
+            className={
+              singleLineView ? 'score-view-toggle__option' : 'score-view-toggle__option score-view-toggle__option--active'
+            }
+            aria-pressed={!singleLineView}
+            onClick={() => setSingleLineView(false)}
+          >
+            Full score
+          </button>
+        </div>
         <ScoreViewer
           ref={scoreViewerRef}
           source={source}
+          singleLineView={singleLineView}
           onNoteTap={handleNoteTap}
           onScoreReady={setTimedNotes}
           onMetronomeClicksReady={setMetronomeClicks}

@@ -22,7 +22,7 @@ export function FileImporter({ onImported }: FileImporterProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".xml,.musicxml,.mxl"
+        accept=".xml,.musicxml,.mxl,.zip"
         onChange={handleChange}
         style={{ display: 'none' }}
       />

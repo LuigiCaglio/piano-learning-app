@@ -48,12 +48,15 @@ export async function touchPiece(id: string): Promise<void> {
   }
 }
 
+// A MusicXML "zip" export (e.g. MuseScore's mobile share sheet) is structurally the same
+// compressed container as .mxl, just with a .zip extension -- OSMD detects the format from
+// the file's contents either way, so both map to 'mxl' here.
 function inferFileType(filename: string): Piece['fileType'] {
-  return filename.toLowerCase().endsWith('.mxl') ? 'mxl' : 'xml';
+  return /\.(mxl|zip)$/i.test(filename) ? 'mxl' : 'xml';
 }
 
 export function fileToPiece(file: File): Piece {
-  const title = file.name.replace(/\.(xml|musicxml|mxl)$/i, '');
+  const title = file.name.replace(/\.(xml|musicxml|mxl|zip)$/i, '');
   return {
     id: crypto.randomUUID(),
     title,
