@@ -1,0 +1,102 @@
+.settings-panel__backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  z-index: 49;
+}
+
+.settings-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(320px, 90vw);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: -4px 0 20px var(--shadow);
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  z-index: 50;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.settings-panel--open {
+  transform: translateX(0);
+}
+
+.settings-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.settings-panel__header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.settings-panel__close {
+  min-width: 36px;
+  min-height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-panel__row input[type='checkbox'] {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-panel__row input[type='color'] {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-panel__theme-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.settings-panel__theme-toggle button {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-panel__theme-toggle button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}

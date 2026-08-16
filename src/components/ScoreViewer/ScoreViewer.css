@@ -1,6 +1,6 @@
 .score-viewer {
   width: 100%;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 8px;
   padding: 8px;
   overflow-x: auto;

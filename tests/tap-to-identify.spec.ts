@@ -18,9 +18,10 @@ test.describe('tap-to-identify', () => {
     await notes.nth(1).click();
 
     await expect(page.locator('.note-readout')).toHaveText('D4');
-    // Klavier renders the active key's label; confirm the note is actually lit up, not just
-    // reflected in the text readout above the keyboard.
-    await expect(page.locator('.piano-keyboard__label')).toHaveText('D4');
+    // Klavier marks the active key with its own .active class; confirm the note is actually
+    // lit up on the keyboard, not just reflected in the text readout above it. (Not asserting
+    // on .piano-keyboard__label here -- note-name labels are an opt-in setting, off by default.)
+    await expect(page.locator('.piano-keyboard .active')).toHaveCount(1);
   });
 
   test('tapping any note at a beat selects every note at that beat, across staves', async ({ page }) => {
@@ -31,7 +32,7 @@ test.describe('tap-to-identify', () => {
     await notes.nth(8).click();
 
     await expect(page.locator('.note-readout')).toHaveText('C4, C3, E3, G3');
-    await expect(page.locator('.piano-keyboard__label')).toHaveCount(4);
+    await expect(page.locator('.piano-keyboard .active')).toHaveCount(4);
   });
 
   test('a near-miss tap (fat-finger touch) still registers via tap tolerance', async ({ page }) => {

@@ -1,6 +1,17 @@
 :root {
   --text: #1f2023;
+  --text-muted: #767676;
   --bg: #f6f5f2;
+  --surface: #ffffff;
+  --border: #dddddd;
+  --border-strong: #cccccc;
+  --accent: #2f7a3d;
+  --accent-contrast: #ffffff;
+  --accent-soft: #e9f5eb;
+  --danger: #a12f26;
+  --danger-bg: #fdecea;
+  --shadow: rgba(0, 0, 0, 0.12);
+  --backdrop: rgba(0, 0, 0, 0.35);
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
 
   font: 16px/145% var(--sans);
@@ -13,11 +24,32 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Explicit in-app theme choice (see useSettings/SettingsPanel) always wins over the OS
+   preference below -- data-theme is only ever "light" or "dark", set directly on <html>. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --text: #e5e4e7;
+    --text-muted: #9a99a1;
     --bg: #16171d;
+    --surface: #24252c;
+    --border: #3a3b44;
+    --border-strong: #4a4b55;
+    --accent-soft: #1f3324;
+    --shadow: rgba(0, 0, 0, 0.4);
+    --backdrop: rgba(0, 0, 0, 0.55);
   }
+}
+
+:root[data-theme='dark'] {
+  --text: #e5e4e7;
+  --text-muted: #9a99a1;
+  --bg: #16171d;
+  --surface: #24252c;
+  --border: #3a3b44;
+  --border-strong: #4a4b55;
+  --accent-soft: #1f3324;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --backdrop: rgba(0, 0, 0, 0.55);
 }
 
 * {

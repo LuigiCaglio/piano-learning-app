@@ -22,19 +22,21 @@
 
 /* Klavier's "realistic" preset marks an active key with a subtle gradient/shadow shift meant
    to look like a physically depressed key -- correct, but too subtle to read as "this is the
-   note" at a glance, especially for one isolated key on a tablet screen. Layer an unmissable
-   outline on top, driven by the same .active class Klavier already applies, so tap-identified
-   and playing notes are obvious without touching Klavier's internals.
-   z-index is only raised for the black-key case: white keys are naturally narrower than their
-   underlying hit area and meant to sit visually behind neighboring black keys, so raising an
-   active white key's z-index too made it cover the black keys next to it. */
-.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-white.active) {
-  outline: 3px solid #2f7a3d;
-  outline-offset: -3px;
-}
-
-.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-black.active) {
-  outline: 3px solid #2f7a3d;
-  outline-offset: -3px;
-  z-index: 2;
+   note" at a glance, especially for one isolated key on a tablet screen, and on black keys
+   (already dark) the shift barely reads at all. Layer a solid color wash on top instead of an
+   outline: an outline around an already-dark black key doesn't move the needle much, while a
+   wash visibly changes the whole key regardless of its base color. Each key's own wrapper div
+   is already position:relative and exactly the key's own visible box (Klavier sizes it via CSS
+   grid, not just an SVG that could overflow it), so an ::after positioned absolute/inset:0 here
+   is naturally confined to that one key -- an active white key can't bleed onto neighboring
+   black keys the way raising its z-index once did. */
+.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-white.active)::after,
+.piano-keyboard div[data-midi-number]:has(.klavier-realistic-key-black.active)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--key-highlight-color, #2f7a3d);
+  opacity: 0.55;
+  border-radius: 0 0 2px 2px;
+  pointer-events: none;
 }

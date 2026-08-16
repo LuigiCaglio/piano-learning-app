@@ -4,6 +4,8 @@ import { ScoreViewer, type ScoreViewerHandle } from './components/ScoreViewer/Sc
 import type { NoteHit } from './components/ScoreViewer/noteIndex';
 import { PianoKeyboard } from './components/PianoKeyboard/PianoKeyboard';
 import { NotePopup } from './components/NotePopup/NotePopup';
+import { SettingsPanel } from './components/SettingsPanel/SettingsPanel';
+import { useSettings } from './settings/useSettings';
 import { TransportControls } from './components/TransportControls';
 import { LoopSelector, type LoopRangeState } from './components/LoopSelector';
 import { HandSelector, type HandFilter } from './components/HandSelector';
@@ -49,6 +51,8 @@ function App() {
   // and the render below); null when nothing's been tapped yet or the popup's been closed.
   const [notePopup, setNotePopup] = useState<{ x: number; y: number } | null>(null);
   const [playNoteOnTap, setPlayNoteOnTap] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settings, updateSettings } = useSettings();
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
 
   // Playback only hears/schedules the selected hand's notes; everything else (the score
@@ -197,6 +201,14 @@ function App() {
         <div className="app-header__actions">
           <SampleLibrary samples={SAMPLE_PIECES} onSelect={handleSampleSelect} />
           <FileImporter onImported={handleImported} />
+          <button
+            type="button"
+            className="app-header__settings-btn"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+          >
+            ⚙
+          </button>
         </div>
       </header>
       <main>
@@ -233,6 +245,8 @@ function App() {
           ref={scoreViewerRef}
           source={source}
           singleLineView={singleLineView}
+          darkMode={settings.theme === 'dark'}
+          cursorColor={settings.scoreHighlightColor}
           onNoteTap={handleNoteTap}
           onScoreReady={setTimedNotes}
           onMetronomeClicksReady={setMetronomeClicks}
@@ -244,6 +258,8 @@ function App() {
             y={notePopup.y}
             activeMidiNotes={displayedMidiNotes}
             noteNames={displayedMidiNotes.map(midiToNoteName).join(', ')}
+            showNoteNames={settings.showNoteNames}
+            highlightColor={settings.keyHighlightColor}
             onClose={() => setNotePopup(null)}
           />
         )}
@@ -256,7 +272,11 @@ function App() {
           <input type="checkbox" checked={playNoteOnTap} onChange={(e) => setPlayNoteOnTap(e.target.checked)} />
           Play sound on tap
         </label>
-        <PianoKeyboard activeMidiNotes={displayedMidiNotes} />
+        <PianoKeyboard
+          activeMidiNotes={displayedMidiNotes}
+          showNoteNames={settings.showNoteNames}
+          highlightColor={settings.keyHighlightColor}
+        />
         {hasMultipleStaves && <HandSelector value={handFilter} onChange={setHandFilter} />}
         {measureRange && (
           <LoopSelector
@@ -278,6 +298,12 @@ function App() {
           onMetronomeChange={setMetronomeEnabled}
         />
       </main>
+      <SettingsPanel
+        open={settingsOpen}
+        settings={settings}
+        onChange={updateSettings}
+        onClose={() => setSettingsOpen(false)}
+      />
       <footer className="app-footer">
         Piano sound: Salamander Grand Piano by Alexander Holm, CC BY 3.0.
         <br />

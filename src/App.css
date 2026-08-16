@@ -26,9 +26,16 @@
   min-height: 44px;
   padding: 10px 16px;
   border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
+}
+
+.app-header__settings-btn {
+  min-width: 44px;
+  padding: 10px !important;
+  font-size: 1.2rem !important;
 }
 
 .note-readout {
@@ -44,7 +51,7 @@
   gap: 6px;
   margin: 0 0 8px;
   padding: 6px;
-  background: #ffffff;
+  background: var(--surface);
   border-radius: 10px;
 }
 
@@ -55,15 +62,15 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #333;
+  color: var(--text);
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .score-view-toggle__option--active {
-  background: #2f7a3d;
-  color: white;
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .tap-sound-toggle {
@@ -87,8 +94,8 @@
   margin: 0 0 16px;
   padding: 10px 14px;
   border-radius: 8px;
-  background: #fdecea;
-  color: #a12f26;
+  background: var(--danger-bg);
+  color: var(--danger);
   font-size: 0.9rem;
 }
 
@@ -97,6 +104,6 @@
   margin: 24px auto 0;
   padding: 0 16px;
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-muted);
   text-align: center;
 }

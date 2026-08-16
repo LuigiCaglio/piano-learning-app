@@ -13,16 +13,17 @@
   gap: 4px;
   min-height: 40px;
   padding: 6px 6px 6px 14px;
-  background: #ffffff;
-  border: 1px solid #ddd;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 20px;
   cursor: pointer;
   font-size: 0.85rem;
+  color: var(--text);
 }
 
 .piece-library__item--active {
-  border-color: #2f7a3d;
-  background: #e9f5eb;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .piece-library__delete {
@@ -31,7 +32,7 @@
   cursor: pointer;
   font-size: 1.1rem;
   line-height: 1;
-  color: #888;
+  color: var(--text-muted);
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -39,6 +40,6 @@
 }
 
 .piece-library__delete:hover {
-  color: #c0392b;
-  background: #fdecea;
+  color: var(--danger);
+  background: var(--danger-bg);
 }
