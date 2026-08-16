@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { waitForScore } from './helpers.js';
+import { waitForScore, expandControls } from './helpers.js';
 
 // Runs under the 'ipad-landscape' project (1024x768, touch-enabled) configured in
 // playwright.config.ts.
@@ -9,6 +9,7 @@ const MIN_TOUCH_TARGET = 40; // slightly under the 44px guideline to allow for a
 test('key touch targets meet minimum size guidelines', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
+  await expandControls(page); // loop-selector below lives in the collapsible controls section
 
   const playPause = await page.locator('.transport-controls__play-pause').boundingBox();
   expect(playPause?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);

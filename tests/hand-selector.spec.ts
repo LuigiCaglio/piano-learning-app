@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { waitForScore, waitForAudioReady } from './helpers.js';
+import { waitForScore, waitForAudioReady, expandControls } from './helpers.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const singleStaffFixture = path.join(__dirname, 'fixtures', 'import-fixture.musicxml');
@@ -10,6 +10,7 @@ const twoStaffFixture = path.join(__dirname, 'fixtures', 'two-staff-fixture.musi
 test('hand selector is hidden for a single-staff piece', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
+  await expandControls(page);
 
   // The demo piece is a grand staff (2 staves), so the selector should be visible there.
   await expect(page.locator('.hand-selector')).toBeVisible();
@@ -23,6 +24,7 @@ test('right-hand-only playback never sounds bass-clef notes', async ({ page }) =
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   await page.locator('.hand-selector__option', { hasText: 'Right hand' }).click();
   await page.locator('.transport-controls__play-pause').click();
@@ -47,6 +49,7 @@ test('left-hand-only playback never sounds treble melody notes', async ({ page }
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   await page.locator('.hand-selector__option', { hasText: 'Left hand' }).click();
   await page.locator('.transport-controls__play-pause').click();
@@ -69,6 +72,7 @@ test('switching hands mid-playback takes effect immediately', async ({ page }) =
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   const playPause = page.locator('.transport-controls__play-pause');
   await page.locator('.hand-selector__option', { hasText: 'Right hand' }).click();
@@ -95,6 +99,7 @@ test('switching hands mid-playback takes effect immediately', async ({ page }) =
 test('tapping a note only shows the active hand\'s notes when a hand filter is set', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
+  await expandControls(page);
 
   // Index 8 is the bass-clef whole-note chord in measure 1 (C3+E3+G3), which shares beat 1
   // with the treble melody's first note (C4, index 0) -- tapping it with no hand filter
@@ -112,6 +117,7 @@ test('tapping a note only shows the active hand\'s notes when a hand filter is s
 test('resets to "both hands" when a different piece is opened', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
+  await expandControls(page);
 
   await page.locator('.hand-selector__option', { hasText: 'Right hand' }).click();
   await expect(page.locator('.hand-selector__option--active')).toHaveText('Right hand');

@@ -1,11 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { waitForScore, waitForAudioReady } from './helpers.js';
+import { waitForScore, waitForAudioReady, expandControls } from './helpers.js';
 
 test.describe('playback', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     await waitForScore(page);
     await waitForAudioReady(page);
+    await expandControls(page); // needed for the tempo slider, which a couple of tests use
   });
 
   test('play button starts playback and highlights notes over time', async ({ page }) => {

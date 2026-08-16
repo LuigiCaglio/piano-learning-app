@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { waitForScore, waitForAudioReady } from './helpers.js';
+import { waitForScore, waitForAudioReady, expandControls } from './helpers.js';
 
 test('metronome toggle is present and off by default', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   await expect(page.locator('.transport-controls__metronome input')).not.toBeChecked();
 });
@@ -13,6 +14,7 @@ test('enabling the metronome adds a count-in delay before the first note on a fr
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   const playPause = page.locator('.transport-controls__play-pause');
 
@@ -40,6 +42,7 @@ test('does not break playback when toggled on mid-piece', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   const playPause = page.locator('.transport-controls__play-pause');
   await playPause.click();

@@ -68,9 +68,18 @@ function stepCursorTo(
   }
   if (moved) {
     cursor.update();
-    // In single-line view the score can be much wider than the viewport, so keep the cursor
-    // horizontally in view the same way it's always been vertically in view.
-    cursor.cursorElement?.scrollIntoView({ behavior: scrollBehavior, inline: 'center', block: 'nearest' });
+    if (cursor.cursorElement) {
+      // The practice bar (Play/Pause, keyboard) is fixed to the bottom of the viewport, over
+      // whatever's scrolled beneath it (see App.tsx/App.css) -- native scrollIntoView doesn't
+      // know that region is covered, so without this the cursor could land right behind it.
+      // --practice-bar-height is set on .app, an ancestor of this element, and custom
+      // properties inherit, so it resolves correctly here despite this <img> being created and
+      // positioned by OSMD rather than React.
+      cursor.cursorElement.style.scrollMarginBottom = 'var(--practice-bar-height, 0px)';
+      // In single-line view the score can be much wider than the viewport, so keep the cursor
+      // horizontally in view the same way it's always been vertically in view.
+      cursor.cursorElement.scrollIntoView({ behavior: scrollBehavior, inline: 'center', block: 'nearest' });
+    }
   }
   return moved;
 }
@@ -150,6 +159,34 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
         stepCursorTo(osmd.cursor, hits[0].timestampRealValue);
       }
     };
+    // touch-action: none (see ScoreViewer.css) hands this container's entire touch gesture to
+    // us -- the browser won't do any native scrolling here at all, drag-to-pan included. That's
+    // necessary for tap reliability (see the drift comment below) but means panning a wide
+    // single-line score has to be reimplemented by hand: track horizontal movement from
+    // pointerdown, and once it passes a threshold, drive container.scrollLeft directly instead
+    // of treating the gesture as a tap. The threshold (24px) sits above the ~18px of incidental
+    // drift a real tap can have (see the "natural drift" regression test) so a genuine tap still
+    // resolves as one, while an actual swipe -- typically 50px+ -- pans instead.
+    const DRAG_THRESHOLD_PX = 24;
+    let activePointerId: number | null = null;
+    let pointerDownX = 0;
+    let dragStartScrollLeft = 0;
+    let isDragScrolling = false;
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== activePointerId) return;
+      const dx = event.clientX - pointerDownX;
+      if (!isDragScrolling && Math.abs(dx) > DRAG_THRESHOLD_PX) {
+        isDragScrolling = true;
+      }
+      if (isDragScrolling) {
+        container.scrollLeft = dragStartScrollLeft - dx;
+      }
+    };
+    const handlePointerUpOrCancel = (event: PointerEvent) => {
+      if (event.pointerId === activePointerId) activePointerId = null;
+    };
+
     // Both click AND pointerup drive the same hit-test, deliberately redundant:
     // - click is the exact event every other working control in this app uses (Play/Pause,
     //   checkboxes, the piece library) -- the one mechanism proven reliable on the user's real
@@ -160,18 +197,35 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     //   cancelled -- confirmed via a CDP-simulated real touch sequence in this repo's tests.
     // - pointerup has no such synthesis step, so it still catches a tap click silently drops
     //   due to drift, on browsers where PointerEvent works as spec'd.
-    // Firing both for the same tap just re-sets the same MIDI notes twice -- harmless.
-    const handleClick = (event: MouseEvent) => handleTap(event.clientX, event.clientY);
-    const handlePointerUp = (event: PointerEvent) => handleTap(event.clientX, event.clientY);
+    // Firing both for the same tap just re-sets the same MIDI notes twice -- harmless. Neither
+    // fires the hit-test if this gesture turned into a horizontal drag instead of a tap.
+    const handleClick = (event: MouseEvent) => {
+      if (isDragScrolling) return;
+      handleTap(event.clientX, event.clientY);
+    };
+    const handlePointerUp = (event: PointerEvent) => {
+      handlePointerUpOrCancel(event);
+      if (isDragScrolling) return;
+      handleTap(event.clientX, event.clientY);
+    };
     // Explicit pointer capture on pointerdown gives the browser the strongest possible signal
     // that JS owns this gesture, independent of whether it correctly honors touch-action: none
-    // for gesture-claiming -- belt-and-suspenders alongside the CSS.
+    // for gesture-claiming -- belt-and-suspenders alongside the CSS. Also starts this gesture's
+    // drag tracking; isDragScrolling is deliberately reset only here (not in the up handlers
+    // below), since click and pointerup both fire for the same released gesture and each needs
+    // to still see it.
     const handlePointerDown = (event: PointerEvent) => {
       container.setPointerCapture(event.pointerId);
+      activePointerId = event.pointerId;
+      pointerDownX = event.clientX;
+      dragStartScrollLeft = container.scrollLeft;
+      isDragScrolling = false;
     };
     container.addEventListener('click', handleClick);
-    container.addEventListener('pointerup', handlePointerUp);
     container.addEventListener('pointerdown', handlePointerDown);
+    container.addEventListener('pointermove', handlePointerMove);
+    container.addEventListener('pointerup', handlePointerUp);
+    container.addEventListener('pointercancel', handlePointerUpOrCancel);
 
     let resizeTimeoutId: ReturnType<typeof setTimeout>;
     const handleResize = () => {
@@ -204,8 +258,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       clearTimeout(resizeTimeoutId);
       window.removeEventListener('resize', handleResize);
       container.removeEventListener('click', handleClick);
-      container.removeEventListener('pointerup', handlePointerUp);
       container.removeEventListener('pointerdown', handlePointerDown);
+      container.removeEventListener('pointermove', handlePointerMove);
+      container.removeEventListener('pointerup', handlePointerUp);
+      container.removeEventListener('pointercancel', handlePointerUpOrCancel);
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;

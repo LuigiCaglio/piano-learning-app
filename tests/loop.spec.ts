@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { waitForScore, waitForAudioReady } from './helpers.js';
+import { waitForScore, waitForAudioReady, expandControls } from './helpers.js';
 
 test('looping a measure range repeats it instead of stopping', async ({ page }) => {
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   await page.check('.loop-selector__toggle input[type="checkbox"]');
   const measureInputs = page.locator('.loop-selector__measure-input');
@@ -36,6 +37,7 @@ test('turning off loop mid-playback lets the piece continue instead of looping f
   await page.goto('/');
   await waitForScore(page);
   await waitForAudioReady(page);
+  await expandControls(page);
 
   const toggle = page.locator('.loop-selector__toggle input[type="checkbox"]');
   await toggle.check();
