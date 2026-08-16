@@ -198,13 +198,19 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     // drift a real tap can have (see the "natural drift" regression test) so a genuine tap still
     // resolves as one, while an actual swipe -- typically 50px+ -- pans instead.
     const DRAG_THRESHOLD_PX = 24;
+    // How far the distance between two fingers has to change from where it started before this
+    // reads as a pinch rather than a two-finger pan -- fingers moving together (pan) keep a
+    // roughly constant distance apart; fingers moving apart/together (pinch) don't.
+    const PINCH_THRESHOLD_PX = 20;
     // Every currently-down pointer's last known position, keyed by pointerId -- a second finger
-    // joining (map size >= 2) means this gesture is unambiguously a scroll, not an attempt at a
-    // note, regardless of the single-finger threshold above or where the fingers land.
+    // joining (map size >= 2) means this gesture is unambiguously a scroll or pinch, not an
+    // attempt at a note, regardless of the single-finger threshold above or where the fingers land.
     const activePointers = new Map<number, { x: number; y: number }>();
     let singleTouchStartX = 0;
     let singleTouchStartScrollLeft = 0;
     let isDragScrolling = false;
+    let pinchStartDistance: number | null = null;
+    let isPinching = false;
 
     const handlePointerMove = (event: PointerEvent) => {
       const last = activePointers.get(event.pointerId);
@@ -212,12 +218,24 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
       if (activePointers.size >= 2) {
-        isDragScrolling = true;
+        isDragScrolling = true; // never a tap, whether this turns out to be a pan or a pinch
+
+        const [idA, idB] = [...activePointers.keys()].sort((a, b) => a - b);
+        const posA = activePointers.get(idA)!;
+        const posB = activePointers.get(idB)!;
+        const distance = Math.hypot(posA.x - posB.x, posA.y - posB.y);
+        pinchStartDistance ??= distance;
+        if (!isPinching && Math.abs(distance - pinchStartDistance) > PINCH_THRESHOLD_PX) {
+          isPinching = true;
+        }
+        // No pinch-to-zoom yet -- but a pinch must still not be misread as a pan (which would
+        // otherwise scroll the score out from under fingers trying to zoom it instead).
+        if (isPinching) return;
+
         // Drive the scroll from one consistent finger only -- applying every finger's own
         // delta independently would sum them during a normal two-finger drag (both moving
         // together), scrolling roughly twice as fast as intended.
-        const referencePointerId = Math.min(...activePointers.keys());
-        if (event.pointerId !== referencePointerId) return;
+        if (event.pointerId !== idA) return;
         container.scrollLeft -= event.clientX - last.x;
         window.scrollBy(0, -(event.clientY - last.y));
         return;
@@ -233,6 +251,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     };
     const handlePointerUpOrCancel = (event: PointerEvent) => {
       activePointers.delete(event.pointerId);
+      if (activePointers.size === 0) {
+        pinchStartDistance = null;
+        isPinching = false;
+      }
     };
 
     // Both click AND pointerup drive the same hit-test, deliberately redundant:
