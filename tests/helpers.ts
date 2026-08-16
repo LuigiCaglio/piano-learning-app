@@ -10,3 +10,10 @@ export async function waitForScore(page: Page) {
 export async function waitForAudioReady(page: Page) {
   await page.waitForSelector('.transport-controls__play-pause:not([disabled])', { timeout: 40_000 });
 }
+
+/** Tempo, metronome, hand selector, and loop selector live inside the practice bar's
+ * collapsible section (see App.tsx) -- collapsed by default so Play/Pause and the keyboard stay
+ * reachable without scrolling. Tests that interact with any of those controls need this first. */
+export async function expandControls(page: Page) {
+  await page.locator('.practice-bar__handle').click();
+}

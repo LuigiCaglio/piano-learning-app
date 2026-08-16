@@ -52,8 +52,27 @@ function App() {
   const [notePopup, setNotePopup] = useState<{ x: number; y: number } | null>(null);
   const [playNoteOnTap, setPlayNoteOnTap] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tempo/metronome/hand/loop controls start collapsed: the practice bar that holds them is
+  // fixed to the bottom of the viewport specifically so Play/Pause and the keyboard are always
+  // reachable without scrolling, even on a short landscape viewport -- but showing every control
+  // all the time would eat too much of that same limited height, defeating the point.
+  const [controlsExpanded, setControlsExpanded] = useState(false);
   const { settings, updateSettings } = useSettings();
   const scoreViewerRef = useRef<ScoreViewerHandle>(null);
+  const practiceBarRef = useRef<HTMLDivElement>(null);
+  const [practiceBarHeight, setPracticeBarHeight] = useState(0);
+
+  // The practice bar's height varies (collapsed vs expanded, and with content like the hand
+  // selector only appearing for multi-staff pieces) -- measure it live so the scrollable content
+  // above it always reserves exactly enough space, rather than guessing a fixed constant that's
+  // wrong in one state or the other.
+  useEffect(() => {
+    const el = practiceBarRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => setPracticeBarHeight(entries[0].contentRect.height));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Playback only hears/schedules the selected hand's notes; everything else (the score
   // itself, the loop range, the follow-along cursor) still reflects the full piece.
@@ -195,7 +214,7 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className="app" style={{ '--practice-bar-height': `${practiceBarHeight}px` } as React.CSSProperties}>
       <header className="app-header">
         <h1>Piano Learning</h1>
         <div className="app-header__actions">
@@ -263,41 +282,61 @@ function App() {
             onClose={() => setNotePopup(null)}
           />
         )}
-        <div className="note-readout">
-          {displayedMidiNotes.length > 0
-            ? displayedMidiNotes.map(midiToNoteName).join(', ')
-            : 'Tap a note or chord above'}
+      </main>
+      <div className="practice-bar" ref={practiceBarRef}>
+        <button
+          type="button"
+          className="practice-bar__handle"
+          onClick={() => setControlsExpanded((v) => !v)}
+          aria-expanded={controlsExpanded}
+        >
+          {controlsExpanded ? '⌄ Hide controls' : '⌃ Tempo, metronome, hands, loop'}
+        </button>
+        {controlsExpanded && (
+          <div className="practice-bar__extra">
+            <label className="tap-sound-toggle">
+              <input type="checkbox" checked={playNoteOnTap} onChange={(e) => setPlayNoteOnTap(e.target.checked)} />
+              Play sound on tap
+            </label>
+            {hasMultipleStaves && <HandSelector value={handFilter} onChange={setHandFilter} />}
+            {measureRange && (
+              <LoopSelector
+                minMeasure={measureRange.min}
+                maxMeasure={measureRange.max}
+                value={loopRange}
+                onChange={setLoopRange}
+              />
+            )}
+            <TransportControls
+              tempoRatio={tempoRatio}
+              metronomeEnabled={metronomeEnabled}
+              audioError={audioError}
+              onTempoChange={setTempoRatio}
+              onMetronomeChange={setMetronomeEnabled}
+            />
+          </div>
+        )}
+        <div className="practice-bar__essentials">
+          <button
+            type="button"
+            className="transport-controls__play-pause"
+            disabled={!isReady}
+            onClick={isPlaying ? pause : play}
+          >
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <div className="note-readout">
+            {displayedMidiNotes.length > 0
+              ? displayedMidiNotes.map(midiToNoteName).join(', ')
+              : 'Tap a note or chord above'}
+          </div>
         </div>
-        <label className="tap-sound-toggle">
-          <input type="checkbox" checked={playNoteOnTap} onChange={(e) => setPlayNoteOnTap(e.target.checked)} />
-          Play sound on tap
-        </label>
         <PianoKeyboard
           activeMidiNotes={displayedMidiNotes}
           showNoteNames={settings.showNoteNames}
           highlightColor={settings.keyHighlightColor}
         />
-        {hasMultipleStaves && <HandSelector value={handFilter} onChange={setHandFilter} />}
-        {measureRange && (
-          <LoopSelector
-            minMeasure={measureRange.min}
-            maxMeasure={measureRange.max}
-            value={loopRange}
-            onChange={setLoopRange}
-          />
-        )}
-        <TransportControls
-          isReady={isReady}
-          isPlaying={isPlaying}
-          tempoRatio={tempoRatio}
-          metronomeEnabled={metronomeEnabled}
-          audioError={audioError}
-          onPlay={play}
-          onPause={pause}
-          onTempoChange={setTempoRatio}
-          onMetronomeChange={setMetronomeEnabled}
-        />
-      </main>
+      </div>
       <SettingsPanel
         open={settingsOpen}
         settings={settings}

@@ -1,7 +1,9 @@
 .app {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 16px;
+  /* Bottom padding reserves exactly the practice bar's own (measured, see App.tsx) height, so
+     the fixed bar never covers the footer -- or, mid-scroll, the bottom of the score. */
+  padding: 16px 16px calc(16px + var(--practice-bar-height, 0px));
 }
 
 .app-header {
@@ -39,11 +41,52 @@
 }
 
 .note-readout {
-  margin: 16px 0;
+  flex: 1;
   font-size: 1.1rem;
   font-weight: 600;
   min-height: 1.5em;
   text-align: center;
+}
+
+.practice-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 1100px;
+  margin: 0 auto;
+  background: var(--surface);
+  box-shadow: 0 -2px 16px var(--shadow);
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  z-index: 15;
+}
+
+.practice-bar__handle {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  margin-bottom: 6px;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.practice-bar__extra {
+  margin-bottom: 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.practice-bar__essentials {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .score-view-toggle {

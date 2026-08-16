@@ -102,4 +102,31 @@ test.describe('tap-to-identify', () => {
 
     await expect(page.locator('.note-readout')).toHaveText('D4');
   });
+
+  test('a deliberate horizontal drag pans the score instead of registering as a tap', async ({ page, context }) => {
+    // Single-line view (the default) relies on touch-action: none to make the drift test above
+    // work, which also means the browser does none of the panning itself -- ScoreViewer's own
+    // pointermove handler has to distinguish "this is a pan" from "this is a tap" by movement
+    // distance. 100px is well past the 24px drag threshold (itself set above the ~18px of
+    // incidental drift a real tap can have, per the test above), so this should read as a pan.
+    const box = await page.locator('.score-viewer svg g.vf-stavenote').nth(1).boundingBox();
+    if (!box) throw new Error('note bounding box not found');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+
+    type TouchEventType = 'touchStart' | 'touchMove' | 'touchEnd';
+    const client = await context.newCDPSession(page);
+    const dispatch = (type: TouchEventType, px: number, py: number) =>
+      client.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x: px, y: py, id: 1 }],
+      });
+
+    await dispatch('touchStart', x, y);
+    await dispatch('touchMove', x + 100, y);
+    await page.waitForTimeout(30);
+    await dispatch('touchEnd', x + 100, y);
+
+    await expect(page.locator('.note-readout')).toHaveText('Tap a note or chord above');
+  });
 });
