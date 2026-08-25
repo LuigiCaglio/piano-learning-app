@@ -107,3 +107,22 @@ Three related requests, all in `src/components/ScoreViewer/noteIndex.ts`,
 Working and not in question: MusicXML import, piece library (IndexedDB),
 playback engine (Tone.js + smplr piano samples) with tempo/loop/hands-separate
 practice, metronome, offline PWA install.
+
+## Ideas not yet implemented
+
+### Pinch-to-zoom on the score
+A two-finger pinch on `.score-viewer` currently just does nothing -- it's
+correctly *not* misread as a pan/scroll (fixed in commit `fa7dfc8`: the
+gesture is classified as a pinch once the distance between the two fingers
+changes >20px from where it started, via `pinchStartDistance`/`isPinching`
+in `ScoreViewer.tsx`'s `handlePointerMove`), but no actual zoom is wired up
+to that classification yet.
+
+If implementing: OSMD supports zoom via `osmd.zoom = factor; osmd.render()`,
+but `render()` is not cheap -- it's the same class of cost that caused the
+tap-to-seek freeze fixed earlier this session (see the `stepCursorTo` doc
+comment). Calling it on every `pointermove` during a pinch would almost
+certainly jank on the tablet. Would need throttling -- e.g. only actually
+re-render every N pixels of accumulated pinch movement (or on a debounce/
+rAF), updating some lighter-weight visual (a CSS `transform: scale()` on the
+container) for immediate feedback in between real re-renders.
