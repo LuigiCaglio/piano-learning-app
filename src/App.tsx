@@ -102,6 +102,12 @@ function App() {
     engine,
   } = usePlaybackEngine(playableNotes, metronomeClicks);
   const displayedNotes = isPlaying ? playingNotes : activeNotes;
+  // Always shown lowest-to-highest (score/tap order otherwise reflects staff/voice traversal
+  // order, not pitch), so a chord reads the same way sheet music and keyboard diagrams do.
+  const sortedDisplayedNotes = useMemo(
+    () => [...displayedNotes].sort((a, b) => a.midi - b.midi),
+    [displayedNotes],
+  );
   const measureRange = getMeasureRange(timedNotes);
 
   useEffect(() => {
@@ -280,7 +286,7 @@ function App() {
           <NotePopup
             x={notePopup.x}
             y={notePopup.y}
-            activeNotes={displayedNotes}
+            activeNotes={sortedDisplayedNotes}
             showNoteNames={settings.showNoteNames}
             highlightColor={settings.keyHighlightColor}
             onClose={() => setNotePopup(null)}
@@ -333,13 +339,13 @@ function App() {
             {isPlaying ? 'Pause' : 'Play'}
           </button>
           <div className="note-readout">
-            {displayedNotes.length > 0
-              ? displayedNotes.map((n) => n.name).join(', ')
+            {sortedDisplayedNotes.length > 0
+              ? sortedDisplayedNotes.map((n) => n.name).join(', ')
               : 'Tap a note or chord above'}
           </div>
         </div>
         <PianoKeyboard
-          activeNotes={displayedNotes}
+          activeNotes={sortedDisplayedNotes}
           showNoteNames={settings.showNoteNames}
           highlightColor={settings.keyHighlightColor}
         />

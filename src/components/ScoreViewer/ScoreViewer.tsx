@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { CursorType, OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { buildNoteIndex, findNoteHitAtPoint, getSystemOrder, type NoteHit, type TappableNote } from './noteIndex';
+import { buildNoteIndex, findNoteHitAtPoint, getStaffAnchors, getSystemOrder, type NoteHit, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
+import { extractInitialKeySignatures, type StaffKeyInfo } from './keySignature';
 import './ScoreViewer.css';
 
 interface ScoreViewerProps {
@@ -117,6 +118,13 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
   // was most recently built instead of a stale snapshot from whenever the effect last ran.
   const tappableNotesRef = useRef<TappableNote[]>([]);
   const systemOrderRef = useRef<unknown[]>([]);
+  // The piece's opening clef/key per staff (see extractInitialKeySignatures) -- set once per
+  // load, since unlike gutterRows below it doesn't depend on layout and so never changes on
+  // resize.
+  const keyInfoRef = useRef<StaffKeyInfo[]>([]);
+  // Clef/key gutter rows actually rendered (singleLineView only -- see the JSX below), combining
+  // keyInfoRef with a fresh vertical anchor per staff on every (re)layout.
+  const [gutterRows, setGutterRows] = useState<Array<StaffKeyInfo & { y: number }>>([]);
   const onNoteTapRef = useRef(onNoteTap);
   onNoteTapRef.current = onNoteTap;
   const onScoreReadyRef = useRef(onScoreReady);
@@ -176,6 +184,13 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       systemOrderRef.current = getSystemOrder(notes);
       const pageCount = Math.max(1, Math.ceil(systemOrderRef.current.length / SYSTEMS_PER_PAGE));
       onPageCountReadyRef.current?.(pageCount);
+
+      const anchors = getStaffAnchors(notes, container.getBoundingClientRect().top);
+      setGutterRows(
+        keyInfoRef.current
+          .filter((info) => anchors.has(info.staffId))
+          .map((info) => ({ ...info, y: anchors.get(info.staffId)! })),
+      );
     };
 
     const handleTap = (clientX: number, clientY: number) => {
@@ -314,6 +329,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       .then(() => {
         if (cancelled) return;
         osmd.render();
+        keyInfoRef.current = extractInitialKeySignatures(osmd);
         rebuildNoteIndex();
         // Cursor stays hidden until playback starts or a note is tapped (see showCursor/
         // hideCursor and handleTap above) -- otherwise it sits on the page looking like
@@ -338,8 +354,33 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
+      keyInfoRef.current = [];
+      setGutterRows([]);
     };
   }, [source, singleLineView, darkMode, cursorColor]);
 
-  return <div ref={containerRef} className="score-viewer" />;
+  return (
+    <div className="score-viewer-outer">
+      <div ref={containerRef} className="score-viewer" />
+      {/* Pinned to the left edge of the (non-scrolling) outer wrapper -- see getStaffAnchors'
+          doc comment -- so it stays put while .score-viewer itself scrolls horizontally
+          underneath it. Full-score view re-prints the clef/key at the start of every system, so
+          this is only needed for the single-line view, where they're drawn once and then can
+          scroll out of sight for the rest of the piece. */}
+      {singleLineView && gutterRows.length > 0 && (
+        <div className="score-viewer__gutter">
+          {gutterRows.map((row) => (
+            <div key={row.staffId} className="score-viewer__gutter-row" style={{ top: row.y }}>
+              <span className="score-viewer__gutter-clef">{row.clefSymbol}</span>
+              {(row.sharps > 0 || row.flats > 0) && (
+                <span className="score-viewer__gutter-accidentals">
+                  {row.sharps > 0 ? '♯'.repeat(row.sharps) : '♭'.repeat(row.flats)}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 });

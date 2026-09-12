@@ -166,6 +166,29 @@ function collectWholeBeat(notes: TappableNote[], seed: TappableNote): NoteHit[] 
   return hits;
 }
 
+/** Vertical screen position for each staff present in `notes`, taken from the earliest
+ * (lowest-timestamp) note on that staff -- lets a caller vertically place a per-staff label (the
+ * clef/key-signature gutter in ScoreViewer) without reaching into VexFlow's internal Stave
+ * objects, which -- like the clef/key glyphs themselves (see findNoteHitAtPoint's doc comment) --
+ * have no stable DOM markup to key off of. Returned relative to `containerTop` (typically the
+ * scrollable container's own getBoundingClientRect().top) rather than as a raw viewport Y, so the
+ * result stays correct regardless of where that container sits on the page. */
+export function getStaffAnchors(notes: TappableNote[], containerTop: number): Map<number, number> {
+  const earliestByStaff = new Map<number, { timestamp: number; rect: DOMRect }>();
+  for (const note of notes) {
+    const hit = note.hits[0];
+    if (!hit) continue;
+    const existing = earliestByStaff.get(hit.staffId);
+    if (existing && existing.timestamp <= hit.timestampRealValue) continue;
+    earliestByStaff.set(hit.staffId, { timestamp: hit.timestampRealValue, rect: note.element.getBoundingClientRect() });
+  }
+  const anchors = new Map<number, number>();
+  for (const [staffId, { rect }] of earliestByStaff) {
+    anchors.set(staffId, (rect.top + rect.bottom) / 2 - containerTop);
+  }
+  return anchors;
+}
+
 /** Fallback for a tap that lands too far from any single note to match above -- most notably
  * the empty gap between a grand staff's two staves. Finds whichever note is horizontally
  * nearest the tap (within toleranceCss) in whichever system (line of music) is vertically

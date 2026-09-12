@@ -29,9 +29,10 @@ test.describe('tap-to-identify', () => {
     // Index 8 is the bass-clef whole-note chord in measure 1 (C3+E3+G3), which starts on beat
     // 1 -- the same beat as the treble melody's first note (C4, index 0). Tapping the chord
     // should therefore surface all four pitches, not just the three in the chord itself.
+    // Displayed lowest-to-highest regardless of which staff/voice they came from.
     await notes.nth(8).click();
 
-    await expect(page.locator('.note-readout')).toHaveText('C4, C3, E3, G3');
+    await expect(page.locator('.note-readout')).toHaveText('C3, E3, G3, C4');
     await expect(page.locator('.piano-keyboard .active')).toHaveCount(4);
   });
 
@@ -73,7 +74,7 @@ test.describe('tap-to-identify', () => {
     // Index 8 is the bass-clef chord, sharing beat 1 with the treble's C4 -- confirms
     // alignment (and the whole-beat merge) holds elsewhere on the score too.
     await notes.nth(8).click();
-    await expect(page.locator('.note-readout')).toHaveText('C4, C3, E3, G3');
+    await expect(page.locator('.note-readout')).toHaveText('C3, E3, G3, C4');
   });
 
   test('a real touch with natural drift still registers as a tap, not a scroll', async ({ page, context }) => {

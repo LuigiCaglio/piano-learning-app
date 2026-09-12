@@ -1,3 +1,7 @@
+.score-viewer-outer {
+  position: relative;
+}
+
 .score-viewer {
   width: 100%;
   background: var(--surface);
@@ -14,4 +18,51 @@
      from instead). overflow-x:auto still covers desktop mice/trackpads, which touch-action
      doesn't govern. */
   touch-action: none;
+}
+
+/* A "frozen pane" over the left edge of the single-line view, so the clef/key signature (drawn
+   by OSMD only once, at the very start of the line) stays visible no matter how far right the
+   score itself has scrolled. Sitting outside .score-viewer (the actual scrolling element) rather
+   than inside it is what makes this work without any scroll-syncing JS: it just never moves. */
+.score-viewer__gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 64px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  border-top-left-radius: 8px;
+  border-bottom-left-radius: 8px;
+  overflow: hidden;
+  /* Purely informational -- never intercept taps meant for the (real, interactive) score
+     underneath, which is what actually drives note selection. */
+  pointer-events: none;
+  z-index: 2;
+}
+
+.score-viewer__gutter-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text);
+}
+
+.score-viewer__gutter-clef {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.score-viewer__gutter-accidentals {
+  font-size: 13px;
+  line-height: 1.1;
+  letter-spacing: 1px;
+  max-width: 56px;
+  text-align: center;
+  word-break: break-all;
 }

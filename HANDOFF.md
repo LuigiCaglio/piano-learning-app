@@ -1,6 +1,6 @@
 # Handoff — Piano Learning App
 
-Status as of 2026-08-11. Written for whoever (human or Claude) picks this up next.
+Status as of 2026-09-12. Written for whoever (human or Claude) picks this up next.
 
 ## What this app is
 
@@ -36,6 +36,23 @@ installed to the home screen on Android, fully close it (swipe from recent
 apps) before reopening, not just background it. Always re-check the footer
 hash after clearing, before concluding anything about a build.
 
+## Gotcha: local `main` had diverged from `origin/main` (fixed 2026-09-12)
+
+Found this session: local `main` and `origin/main` were "ahead 28, behind 28"
+of each other -- every one of this repo's ~28 commits existed twice, under
+two different hashes. Turned out to be harmless: `git diff` between the two
+tips was completely empty (identical file content, identical messages/dates),
+the only difference was commit author email (`luigicaglio@gmail.com` locally
+vs. the GitHub noreply address on `origin/main`) -- something rewrote
+authorship metadata on one side at some point. Fixed with
+`git reset --soft origin/main` (safe here specifically *because* the trees
+were identical -- verify that with `git diff --stat <local-tip> <origin-tip>`
+before ever doing this again, and never with `--hard` while there's
+uncommitted work, since that discards it). All hashes below are the
+`origin/main` ones, post-fix. If `git status` ever again reports a diverged
+`main` with a suspiciously equal ahead/behind count, check for this same
+harmless cause before assuming real conflicting work exists.
+
 ## Current status: confirmed working, including on the tablet
 
 Everything below has been verified via the full automated suite (Vitest +
@@ -52,7 +69,7 @@ the tablet, while pressing Play always did — despite the tap→state pipeline
 passing every automated test across five different event-handling
 implementations (`click`, `pointerup`, `pointerdown`+`setPointerCapture`, and
 combinations). The investigation spanned most of a prior session; see git log
-around commits `4bfa1e8`..`b95a4d5` for the blow-by-blow if the root cause
+around commits `a3ac8b9`..`675fab8` for the blow-by-blow if the root cause
 below ever turns out to be incomplete.
 
 **Actual root cause**, found by testing on desktop Chrome via a (since-removed)
@@ -62,13 +79,13 @@ What was missing was *visible feedback*. Two compounding issues:
 1. Klavier's "realistic" piano key preset (`node_modules/klavier/dist/realistic.mjs`)
    marks an active key with only a few-shades-darker gradient plus a
    drop-shadow — subtle by design (simulates a physically depressed key), not
-   a flashy highlight. Fixed in build `40503c5`: a bold orange outline in
+   a flashy highlight. Fixed in build `fe13a92`: a bold orange outline in
    `src/components/PianoKeyboard/PianoKeyboard.css`, driven by the same
    `.klavier-realistic-key-*.active` class Klavier already applies.
 2. Tap never touched the *score* itself — only the piano keyboard below it.
    The user's own framing nailed it: "make it show a location in the
    pentagram, the same way the play/pause thing does." Fixed in build
-   `fe126ed`: tap now shows and moves OSMD's own cursor (the "bouncing ball"
+   `5707dca`: tap now shows and moves OSMD's own cursor (the "bouncing ball"
    playback uses) to the tapped note's position, via a `stepCursorTo` helper
    shared with `advanceCursorTo` in `ScoreViewer.tsx` — literally the same
    mechanism, not a parallel implementation.
@@ -90,10 +107,51 @@ Three related requests, all in `src/components/ScoreViewer/noteIndex.ts`,
    which already existed but was unused by tap) — pressing Play next starts
    from the tapped position instead of always the beginning.
 
+### New this session (2026-09-12): note-order, tap-sound toggle, clef/key gutter
+Three requests:
+1. Note names (note-readout text, the note-preview popup, and the piano
+   keyboard's own labels) are now always sorted lowest-to-highest by MIDI
+   pitch before display -- previously they showed in whatever order the
+   score/tap traversal happened to produce. Sorted once in `App.tsx`
+   (`sortedDisplayedNotes`), fed to all three display sites.
+2. "Play sound on tap" was already implemented (a checkbox under
+   "⌃ Tempo, metronome, hands, loop" in the practice bar, wired to
+   `playNoteOnTap` in `App.tsx`) -- just wasn't obviously discoverable.
+3. New: a small panel pinned to the left edge of the **single-line
+   (scrolling) view** now always shows each staff's clef and key signature
+   (⌇ sharps/flats), even after scrolling the score far to the right --
+   previously they were drawn once at the very start of the line and then
+   scrolled out of view for the rest of the piece. Full-score (multi-line)
+   view doesn't need this since it reprints the clef/key at the start of
+   every system already.
+   - `src/components/ScoreViewer/keySignature.ts` (`extractInitialKeySignatures`):
+     reads the clef/key straight from `osmd.Sheet.SourceMeasures[0]`'s
+     instructions, not scraped from the rendered SVG (VexFlow's SVG output
+     has no stable per-glyph markup to key a "clef" or "key signature"
+     selector off of). Gotcha hit while building this: `SourceStaffEntry
+     .ParentStaff` is unset on these synthetic first-instructions entries --
+     the staff identity has to come from `sheet.Staves[staffIndex]` instead
+     (positional pairing, per `FirstInstructionsStaffEntries`' own doc
+     comment), not from the entry itself.
+   - `noteIndex.ts` (`getStaffAnchors`): vertical screen position per staff,
+     from the earliest note's own bounding rect -- reuses the existing
+     tap-hit-test note index rather than reaching into VexFlow's internal
+     `Stave` objects (also no stable API to key off of).
+   - `ScoreViewer.tsx`/`.css`: the gutter is a sibling of `.score-viewer`
+     (the actual scrolling element), not a child of it -- that's what makes
+     it stay put on scroll with zero scroll-syncing JS; it just never moves.
+   - v1 simplification: only ever shows the piece's *opening* clef/key per
+     staff, not a later mid-piece change (rare in practice; would need
+     following scroll position back to a measure to do properly).
+   - Verified with a synthetic 4-sharp, 24-measure test MusicXML (wide
+     enough to actually require scrolling) via a throwaway Playwright
+     script, screenshotting before/after a 1500px scroll -- not checked in,
+     since it was throwaway.
+
 ## Useful commands
 - `npm run build` — typecheck + production build
-- `npx vitest run` — unit tests (~1.5s, 39 tests)
-- `npx playwright test` — full e2e suite (~4 min, 45 tests across
+- `npx vitest run` — unit tests (~3s, 43 tests)
+- `npx playwright test` — full e2e suite (~4 min, 49 tests across
   chromium-desktop/ipad-landscape/ipad-portrait). The tap-drift regression
   test is `tests/tap-to-identify.spec.ts` → *"a real touch with natural drift
   still registers as a tap, not a scroll"*.
@@ -112,7 +170,7 @@ practice, metronome, offline PWA install.
 
 ### Pinch-to-zoom on the score
 A two-finger pinch on `.score-viewer` currently just does nothing -- it's
-correctly *not* misread as a pan/scroll (fixed in commit `fa7dfc8`: the
+correctly *not* misread as a pan/scroll (fixed in commit `d25a226`: the
 gesture is classified as a pinch once the distance between the two fingers
 changes >20px from where it started, via `pinchStartDistance`/`isPinching`
 in `ScoreViewer.tsx`'s `handlePointerMove`), but no actual zoom is wired up
