@@ -166,27 +166,36 @@ function collectWholeBeat(notes: TappableNote[], seed: TappableNote): NoteHit[] 
   return hits;
 }
 
-/** Vertical screen position for each staff present in `notes`, taken from the earliest
- * (lowest-timestamp) note on that staff -- lets a caller vertically place a per-staff label (the
- * clef/key-signature gutter in ScoreViewer) without reaching into VexFlow's internal Stave
- * objects, which -- like the clef/key glyphs themselves (see findNoteHitAtPoint's doc comment) --
- * have no stable DOM markup to key off of. Returned relative to `containerTop` (typically the
- * scrollable container's own getBoundingClientRect().top) rather than as a raw viewport Y, so the
- * result stays correct regardless of where that container sits on the page. */
-export function getStaffAnchors(notes: TappableNote[], containerTop: number): Map<number, number> {
-  const earliestByStaff = new Map<number, { timestamp: number; rect: DOMRect }>();
+/** Viewport x of wherever the widest staff's opening "instructions" (clef, key signature, time
+ * signature) end and its first note begins -- taken from that staff's earliest (lowest-
+ * timestamp) note, the same way findNoteHitAtPoint's neighbors avoid reaching into VexFlow's
+ * internal Stave objects (no stable DOM markup to key a "where do the instructions end" query
+ * off of otherwise). Used to size the clef/key gutter in ScoreViewer: it crops a clone of the
+ * real rendered notation to just past this point, so a piece with more sharps/flats (or a wider
+ * clef) automatically gets a wider gutter instead of a fixed guess that's sometimes too narrow
+ * (clipping the key signature) or too wide (dead space before the first note). Takes the max
+ * across staves since a grand staff's two clefs/key signatures don't always end at quite the
+ * same x. Returns 0 if `notes` is empty (caller should treat that as "no gutter"). Like
+ * getBoundingClientRect() itself, this reflects the container's *current* scroll position --
+ * see ScoreViewer's own scrollLeft correction for why that matters when called from a
+ * resize-triggered rebuild rather than fresh after load. */
+export function getInstructionsEndX(notes: TappableNote[]): number {
+  const earliestByStaff = new Map<number, { timestamp: number; left: number }>();
   for (const note of notes) {
     const hit = note.hits[0];
     if (!hit) continue;
     const existing = earliestByStaff.get(hit.staffId);
     if (existing && existing.timestamp <= hit.timestampRealValue) continue;
-    earliestByStaff.set(hit.staffId, { timestamp: hit.timestampRealValue, rect: note.element.getBoundingClientRect() });
+    earliestByStaff.set(hit.staffId, {
+      timestamp: hit.timestampRealValue,
+      left: note.element.getBoundingClientRect().left,
+    });
   }
-  const anchors = new Map<number, number>();
-  for (const [staffId, { rect }] of earliestByStaff) {
-    anchors.set(staffId, (rect.top + rect.bottom) / 2 - containerTop);
+  let maxLeft = 0;
+  for (const { left } of earliestByStaff.values()) {
+    maxLeft = Math.max(maxLeft, left);
   }
-  return anchors;
+  return maxLeft;
 }
 
 /** Fallback for a tap that lands too far from any single note to match above -- most notably

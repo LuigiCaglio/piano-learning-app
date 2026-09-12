@@ -1,9 +1,13 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { CursorType, OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
-import { buildNoteIndex, findNoteHitAtPoint, getStaffAnchors, getSystemOrder, type NoteHit, type TappableNote } from './noteIndex';
+import { buildNoteIndex, findNoteHitAtPoint, getInstructionsEndX, getSystemOrder, type NoteHit, type TappableNote } from './noteIndex';
 import { extractMetronomeClicks, extractTimedNotes, type MetronomeClick, type TimedNote } from './extractTimedNotes';
-import { extractInitialKeySignatures, type StaffKeyInfo } from './keySignature';
 import './ScoreViewer.css';
+
+// Small margin past the computed instructions-end x (see getInstructionsEndX), so the gutter's
+// crop line doesn't sit flush against the last accidental/clef curve -- a little breathing room
+// reads as an intentional edge rather than a clipped one.
+const GUTTER_MARGIN_PX = 6;
 
 interface ScoreViewerProps {
   source: string | Blob;
@@ -118,13 +122,10 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
   // was most recently built instead of a stale snapshot from whenever the effect last ran.
   const tappableNotesRef = useRef<TappableNote[]>([]);
   const systemOrderRef = useRef<unknown[]>([]);
-  // The piece's opening clef/key per staff (see extractInitialKeySignatures) -- set once per
-  // load, since unlike gutterRows below it doesn't depend on layout and so never changes on
-  // resize.
-  const keyInfoRef = useRef<StaffKeyInfo[]>([]);
-  // Clef/key gutter rows actually rendered (singleLineView only -- see the JSX below), combining
-  // keyInfoRef with a fresh vertical anchor per staff on every (re)layout.
-  const [gutterRows, setGutterRows] = useState<Array<StaffKeyInfo & { y: number }>>([]);
+  // Holds a cropped clone of the real rendered notation (see updateGutter below), imperatively
+  // managed like containerRef itself rather than through React state/props -- there's nothing
+  // here React needs to reconcile, just DOM nodes to swap on (re)layout.
+  const gutterRef = useRef<HTMLDivElement>(null);
   const onNoteTapRef = useRef(onNoteTap);
   onNoteTapRef.current = onNoteTap;
   const onScoreReadyRef = useRef(onScoreReady);
@@ -174,10 +175,45 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
     });
     osmdRef.current = osmd;
 
+    // Keeps the clef/key gutter (single-line view only -- full-score already reprints the
+    // clef/key at the start of every system) showing an accurate crop of the *real* rendered
+    // notation -- a cloned, cropped copy of OSMD's own SVG, not a hand-drawn approximation, so
+    // it's pixel-for-pixel what a musician would see at the very start of the line, however many
+    // sharps/flats that happens to involve. Cloning rather than reaching into the live SVG is
+    // what lets it stay visible while .score-viewer itself scrolls out from under it (see
+    // ScoreViewer.css) -- the clone is a separate, static copy that never moves.
+    const updateGutter = (notes: TappableNote[]) => {
+      const gutterEl = gutterRef.current;
+      if (!gutterEl) return;
+      gutterEl.replaceChildren();
+      gutterEl.style.display = 'none';
+      if (!singleLineView) return;
+
+      const svg = container.querySelector('svg');
+      const instructionsEndX = getInstructionsEndX(notes);
+      if (!svg || instructionsEndX <= 0) return;
+
+      // getBoundingClientRect() reflects the container's *current* scroll position, but the
+      // gutter must always show what's visible at scrollLeft 0 (that's the whole point) --
+      // adding scrollLeft back cancels out however far the real notation has already scrolled,
+      // giving the same crop width regardless of when this runs (fresh after load, or from a
+      // resize-triggered rebuild while the user's mid-scroll).
+      const width = instructionsEndX - container.getBoundingClientRect().left + container.scrollLeft + GUTTER_MARGIN_PX;
+
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.removeAttribute('id'); // avoid a duplicate-id clone of the live SVG's own id
+      clone.style.display = 'block';
+      gutterEl.appendChild(clone);
+      gutterEl.style.width = `${width}px`;
+      gutterEl.style.display = 'block';
+    };
+
     let cancelled = false;
     // Rebuilds both the tap hit-test index and the page-navigation system order together --
     // they're derived from the same OSMD traversal and go stale at the same times (initial
-    // render, and any autoResize-triggered re-layout that replaces the SVG elements).
+    // render, and any autoResize-triggered re-layout that replaces the SVG elements). The gutter
+    // is refreshed alongside them for the same reason: a resize can change both the crop width
+    // (rewrapped measures shift where the first note lands) and the SVG content itself.
     const rebuildNoteIndex = () => {
       const notes = buildNoteIndex(osmd);
       tappableNotesRef.current = notes;
@@ -185,12 +221,7 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       const pageCount = Math.max(1, Math.ceil(systemOrderRef.current.length / SYSTEMS_PER_PAGE));
       onPageCountReadyRef.current?.(pageCount);
 
-      const anchors = getStaffAnchors(notes, container.getBoundingClientRect().top);
-      setGutterRows(
-        keyInfoRef.current
-          .filter((info) => anchors.has(info.staffId))
-          .map((info) => ({ ...info, y: anchors.get(info.staffId)! })),
-      );
+      updateGutter(notes);
     };
 
     const handleTap = (clientX: number, clientY: number) => {
@@ -329,7 +360,6 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       .then(() => {
         if (cancelled) return;
         osmd.render();
-        keyInfoRef.current = extractInitialKeySignatures(osmd);
         rebuildNoteIndex();
         // Cursor stays hidden until playback starts or a note is tapped (see showCursor/
         // hideCursor and handleTap above) -- otherwise it sits on the page looking like
@@ -354,33 +384,20 @@ export const ScoreViewer = forwardRef<ScoreViewerHandle, ScoreViewerProps>(funct
       osmd.clear();
       container.innerHTML = '';
       osmdRef.current = null;
-      keyInfoRef.current = [];
-      setGutterRows([]);
+      gutterRef.current?.replaceChildren();
+      if (gutterRef.current) gutterRef.current.style.display = 'none';
     };
   }, [source, singleLineView, darkMode, cursorColor]);
 
   return (
     <div className="score-viewer-outer">
       <div ref={containerRef} className="score-viewer" />
-      {/* Pinned to the left edge of the (non-scrolling) outer wrapper -- see getStaffAnchors'
-          doc comment -- so it stays put while .score-viewer itself scrolls horizontally
-          underneath it. Full-score view re-prints the clef/key at the start of every system, so
-          this is only needed for the single-line view, where they're drawn once and then can
-          scroll out of sight for the rest of the piece. */}
-      {singleLineView && gutterRows.length > 0 && (
-        <div className="score-viewer__gutter">
-          {gutterRows.map((row) => (
-            <div key={row.staffId} className="score-viewer__gutter-row" style={{ top: row.y }}>
-              <span className="score-viewer__gutter-clef">{row.clefSymbol}</span>
-              {(row.sharps > 0 || row.flats > 0) && (
-                <span className="score-viewer__gutter-accidentals">
-                  {row.sharps > 0 ? '♯'.repeat(row.sharps) : '♭'.repeat(row.flats)}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Populated imperatively by updateGutter above with a cropped clone of the real rendered
+          notation. Pinned to the left edge of the (non-scrolling) outer wrapper -- sitting
+          outside .score-viewer, the actual scrolling element, is what keeps it in place with no
+          scroll-syncing JS; it just never moves. Hidden (display:none, no content) until
+          updateGutter has something to show. */}
+      <div ref={gutterRef} className="score-viewer__gutter" />
     </div>
   );
 });

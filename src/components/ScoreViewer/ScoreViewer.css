@@ -23,13 +23,22 @@
 /* A "frozen pane" over the left edge of the single-line view, so the clef/key signature (drawn
    by OSMD only once, at the very start of the line) stays visible no matter how far right the
    score itself has scrolled. Sitting outside .score-viewer (the actual scrolling element) rather
-   than inside it is what makes this work without any scroll-syncing JS: it just never moves. */
+   than inside it is what makes this work without any scroll-syncing JS: it just never moves.
+   Width and content (a cropped clone of the real rendered SVG) are set imperatively by
+   ScoreViewer's updateGutter -- display:none/no width here is just the pre-content default, so
+   nothing flashes full-width-and-empty before that first runs. padding-top/-left mirror
+   .score-viewer's own padding above (top and left only -- there's nothing relying on a matching
+   right/bottom inset) so the cloned notation lines up exactly with where the real notation sits
+   at rest (scrollLeft 0), pixel for pixel; getInstructionsEndX's width calculation assumes this
+   exact padding, so keep the two in sync if either changes. */
 .score-viewer__gutter {
+  display: none;
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: 64px;
+  padding-top: 8px;
+  padding-left: 8px;
   background: var(--surface);
   border-right: 1px solid var(--border);
   border-top-left-radius: 8px;
@@ -41,28 +50,6 @@
   z-index: 2;
 }
 
-.score-viewer__gutter-row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  color: var(--text);
-}
-
-.score-viewer__gutter-clef {
-  font-size: 30px;
-  line-height: 1;
-}
-
-.score-viewer__gutter-accidentals {
-  font-size: 13px;
-  line-height: 1.1;
-  letter-spacing: 1px;
-  max-width: 56px;
-  text-align: center;
-  word-break: break-all;
+.score-viewer__gutter svg {
+  display: block;
 }

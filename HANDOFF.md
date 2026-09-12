@@ -118,31 +118,47 @@ Three requests:
    "⌃ Tempo, metronome, hands, loop" in the practice bar, wired to
    `playNoteOnTap` in `App.tsx`) -- just wasn't obviously discoverable.
 3. New: a small panel pinned to the left edge of the **single-line
-   (scrolling) view** now always shows each staff's clef and key signature
-   (⌇ sharps/flats), even after scrolling the score far to the right --
+   (scrolling) view** now always shows the real clef + key signature (the
+   actual staff lines with sharps/flats engraved on them, not a text
+   approximation), even after scrolling the score far to the right --
    previously they were drawn once at the very start of the line and then
    scrolled out of view for the rest of the piece. Full-score (multi-line)
    view doesn't need this since it reprints the clef/key at the start of
    every system already.
-   - `src/components/ScoreViewer/keySignature.ts` (`extractInitialKeySignatures`):
-     reads the clef/key straight from `osmd.Sheet.SourceMeasures[0]`'s
-     instructions, not scraped from the rendered SVG (VexFlow's SVG output
-     has no stable per-glyph markup to key a "clef" or "key signature"
-     selector off of). Gotcha hit while building this: `SourceStaffEntry
-     .ParentStaff` is unset on these synthetic first-instructions entries --
-     the staff identity has to come from `sheet.Staves[staffIndex]` instead
-     (positional pairing, per `FirstInstructionsStaffEntries`' own doc
-     comment), not from the entry itself.
-   - `noteIndex.ts` (`getStaffAnchors`): vertical screen position per staff,
-     from the earliest note's own bounding rect -- reuses the existing
-     tap-hit-test note index rather than reaching into VexFlow's internal
-     `Stave` objects (also no stable API to key off of).
-   - `ScoreViewer.tsx`/`.css`: the gutter is a sibling of `.score-viewer`
-     (the actual scrolling element), not a child of it -- that's what makes
-     it stay put on scroll with zero scroll-syncing JS; it just never moves.
-   - v1 simplification: only ever shows the piece's *opening* clef/key per
-     staff, not a later mid-piece change (rare in practice; would need
-     following scroll position back to a measure to do properly).
+   - First cut used a hand-rolled unicode clef glyph + repeated ♯/♭
+     characters (reading clef/key straight from `osmd.Sheet`'s instructions).
+     Worked, but the user asked for the real staff/pentagram instead --
+     replaced entirely with the approach below on the very next request.
+   - Current approach, in `ScoreViewer.tsx`'s `updateGutter`: clone OSMD's
+     own rendered `<svg>` (`container.querySelector('svg').cloneNode(true)`)
+     and crop it to a fixed pixel width via `overflow:hidden` on the gutter
+     div -- so what's shown is pixel-for-pixel the real notation, however
+     many sharps/flats that involves, not a re-derived approximation.
+     Cloning (rather than reaching into the live SVG in place) is what lets
+     it stay visible while `.score-viewer` scrolls out from under it: the
+     clone is a separate, static copy, sitting in a sibling div outside the
+     scrolling element, that never moves.
+   - `noteIndex.ts` (`getInstructionsEndX`): the crop width is computed
+     dynamically, not guessed -- it's the x-position of the widest staff's
+     earliest note (i.e. where that staff's clef/key/time signature end),
+     reusing the existing tap-hit-test note index rather than reaching into
+     VexFlow's internal `Stave` objects (no stable API to key a "where do
+     the instructions end" query off of otherwise). A piece with more
+     sharps/flats gets a wider gutter automatically.
+   - Gotcha: `getBoundingClientRect()` reflects the container's *current*
+     scroll position, but the crop width must always be "as if scrollLeft
+     were 0" (that's the whole point) -- `updateGutter` adds
+     `container.scrollLeft` back into the calculation to cancel that out,
+     otherwise a resize-triggered rebuild while the user's mid-scroll would
+     compute a too-narrow (or negative) width.
+   - Alignment gotcha: the clone needs the *same* `padding-top`/`padding-left`
+     as `.score-viewer` itself (see the CSS comment) for the cropped
+     notation to land in exactly the same screen position as the real
+     thing at rest -- the two are coupled; change one, change the other.
+   - v1 simplification: only ever shows the piece's *opening* clef/key
+     (whatever the real SVG's leftmost content is), not a later mid-piece
+     change (rare in practice; would need following scroll position back to
+     a measure to do properly).
    - Verified with a synthetic 4-sharp, 24-measure test MusicXML (wide
      enough to actually require scrolling) via a throwaway Playwright
      script, screenshotting before/after a 1500px scroll -- not checked in,
