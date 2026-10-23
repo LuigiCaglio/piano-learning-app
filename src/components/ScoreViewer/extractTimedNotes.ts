@@ -109,6 +109,25 @@ export function findTimestampAtTime(notes: TimedNote[], currentTime: number): nu
   return target;
 }
 
+/** Every note sounding at `currentTime` -- its onset has passed but its release (per its own
+ * written duration, plus `tailSeconds`) hasn't. Drives the piano-key highlight from the same
+ * audio-clock time as the score cursor (see App.tsx's playback-follow effect) rather than from
+ * the audio engine's own onStart/onEnded callbacks -- those fire whenever a note is *dispatched*
+ * to the Web Audio scheduler, which with a multi-second lookahead (see PlaybackEngine) can be
+ * well before it's actually heard. `tailSeconds` (0 by default) lets a caller extend the window
+ * past the note's written duration -- e.g. to match the piano sample's own natural decay, so a
+ * struck key's highlight doesn't visually cut off before the sound has actually faded. Relies on
+ * `notes` being startTime-sorted (extractTimedNotes' own output already is) to break out early
+ * rather than scanning the whole piece on every call. */
+export function findActiveNotesAtTime(notes: TimedNote[], currentTime: number, tailSeconds = 0): TimedNote[] {
+  const active: TimedNote[] = [];
+  for (const note of notes) {
+    if (note.startTime > currentTime) break;
+    if (note.startTime + note.duration + tailSeconds > currentTime) active.push(note);
+  }
+  return active;
+}
+
 /** Inverse of findTimestampAtTime: the playback-seconds position of the note stack at the
  * given OSMD enrolled timestamp, for seeking playback to a tapped note. Picks the closest
  * match rather than requiring exact equality, since the timestamp here (from

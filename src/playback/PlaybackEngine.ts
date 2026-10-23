@@ -1,10 +1,23 @@
-import { CacheStorage, SplendidGrandPiano, type StopFn } from 'smplr';
+import { CacheStorage, Scheduler, SplendidGrandPiano, type StopFn } from 'smplr';
 import type { MetronomeClick, TimedNote } from '../components/ScoreViewer/extractTimedNotes';
 
 /** Standard 88-key piano range (A0-C8). */
 const PIANO_KEY_RANGE = Array.from({ length: 88 }, (_, i) => i + 21);
 const COUNT_IN_BEATS = 4;
 const DEFAULT_SECONDS_PER_BEAT = 0.6; // fallback (~100bpm) if no metronome clicks are available yet
+
+// smplr's default lookahead (200ms, polled every 50ms) is tuned for interactive/improvised
+// playback, not our case: every note's exact time is known upfront, so there's no reason not
+// to commit each note to the Web Audio clock (AudioBufferSourceNode.start(when), which plays
+// sample-accurately regardless of when the JS call happens to run) much further ahead. The
+// default's thin margin is what caused audible glitches under real-world main-thread load (a
+// re-render, a layout reflow, a GC pause): once a stall ran longer than ~150ms, the scheduler's
+// setInterval poll woke up to find a note's time already in the past, started it late/out of
+// order, and produced exactly the "audio glitches, cursor stutters" symptom reported after
+// playing a piece on an older tablet. A multi-second lookahead makes that margin large enough
+// that only a genuinely pathological stall could still cause it.
+const SCHEDULER_LOOKAHEAD_MS = 2000;
+const SCHEDULER_INTERVAL_MS = 30;
 
 /**
  * Drives piano playback of a TimedNote[] timeline against the Web Audio clock.
@@ -24,20 +37,12 @@ export class PlaybackEngine {
   private startAudioTime = 0;
   private startOffsetSeconds = 0;
   private activeStopFns: StopFn[] = [];
-  private activeMidiNotes = new Set<number>();
   private endTimeoutId: ReturnType<typeof setTimeout> | undefined;
   private loop: { start: number; end: number } | null = null;
-  // name is the note's actual spelled name as written in the score (e.g. "Eb4" vs "D#4") --
-  // see TimedNote.name; passed alongside midi so callers can display it without having to
-  // recompute a spelling from midi alone, which is enharmonically ambiguous.
-  private onNoteOn?: (midi: number, name: string) => void;
-  private onNoteOff?: (midi: number) => void;
   private onPlaybackEnd?: () => void;
 
   constructor(options?: {
     onLoadProgress?: (progress: { loaded: number; total: number }) => void;
-    onNoteOn?: (midi: number, name: string) => void;
-    onNoteOff?: (midi: number) => void;
     onPlaybackEnd?: () => void;
   }) {
     this.context = new AudioContext();
@@ -50,9 +55,11 @@ export class PlaybackEngine {
       storage: CacheStorage('piano-samples'),
       notesToLoad: { notes: PIANO_KEY_RANGE, velocityRange: [90, 90] },
       onLoadProgress: options?.onLoadProgress,
+      scheduler: Scheduler(this.context, {
+        lookaheadMs: SCHEDULER_LOOKAHEAD_MS,
+        intervalMs: SCHEDULER_INTERVAL_MS,
+      }),
     });
-    this.onNoteOn = options?.onNoteOn;
-    this.onNoteOff = options?.onNoteOff;
     this.onPlaybackEnd = options?.onPlaybackEnd;
   }
 
@@ -66,6 +73,17 @@ export class PlaybackEngine {
 
   get durationSeconds(): number {
     return this.notes.reduce((max, n) => Math.max(max, n.startTime + n.duration), 0);
+  }
+
+  /** The nominal-timeline position the current playing segment was scheduled from -- i.e.
+   * scheduleFrom's own `offsetSeconds`, which skips any note whose onset is before it (see
+   * scheduleFrom). Any note that started before this point was never actually triggered this
+   * segment, however long its written duration -- a seek, loop restart, tempo change, or hand
+   * filter change all cancel and reschedule from "now", silencing whatever was sustaining.
+   * Lets a caller (see App.tsx's playback-follow effect) tell a genuinely still-sounding note
+   * apart from one that merely *looks* like it should still be sounding by its own duration. */
+  get scheduledFromSeconds(): number {
+    return this.startOffsetSeconds;
   }
 
   /** Replaces the schedulable note list (e.g. when a hand is muted for practice). If
@@ -126,7 +144,6 @@ export class PlaybackEngine {
     this.startOffsetSeconds = this.currentTime();
     this.playing = false;
     this.cancelScheduled();
-    this.silenceActiveNotes();
   }
 
   seek(seconds: number): void {
@@ -170,7 +187,6 @@ export class PlaybackEngine {
   private rescheduleFromCurrentPosition(): void {
     const pos = this.currentTime();
     this.cancelScheduled();
-    this.silenceActiveNotes();
     this.startOffsetSeconds = pos;
     this.startAudioTime = this.context.currentTime;
     this.scheduleFrom(pos);
@@ -186,7 +202,6 @@ export class PlaybackEngine {
       () => {
         if (this.loop) {
           this.cancelScheduled();
-          this.silenceActiveNotes();
           this.startOffsetSeconds = this.loop.start;
           this.startAudioTime = this.context.currentTime;
           this.scheduleFrom(this.loop.start);
@@ -205,23 +220,7 @@ export class PlaybackEngine {
       if (note.startTime >= segmentEnd) break;
       const time = audioAnchor + (note.startTime - offsetSeconds) / this.tempoRatio;
       const duration = note.duration / this.tempoRatio;
-      const midi = note.midi;
-      const name = note.name;
-      this.activeStopFns.push(
-        this.piano.start({
-          note: midi,
-          time,
-          duration,
-          onStart: () => {
-            this.activeMidiNotes.add(midi);
-            this.onNoteOn?.(midi, name);
-          },
-          onEnded: () => {
-            this.activeMidiNotes.delete(midi);
-            this.onNoteOff?.(midi);
-          },
-        }),
-      );
+      this.activeStopFns.push(this.piano.start({ note: note.midi, time, duration }));
     }
 
     if (this.metronomeEnabled) {
@@ -277,15 +276,8 @@ export class PlaybackEngine {
     clearTimeout(this.endTimeoutId);
   }
 
-  /** Notifies onNoteOff for any note left sounding after a pause/cancel cuts it off early. */
-  private silenceActiveNotes(): void {
-    for (const midi of this.activeMidiNotes) this.onNoteOff?.(midi);
-    this.activeMidiNotes.clear();
-  }
-
   dispose(): void {
     this.cancelScheduled();
-    this.silenceActiveNotes();
     this.piano.dispose();
     this.context.close();
   }

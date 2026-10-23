@@ -18,6 +18,7 @@ import { SAMPLE_PIECES, type SamplePiece } from './data/samples';
 import { usePlaybackEngine } from './playback/usePlaybackEngine';
 import type { DisplayNote } from './lib/midi';
 import {
+  findActiveNotesAtTime,
   findTimeAtTimestamp,
   findTimestampAtTime,
   getMeasureRange,
@@ -29,9 +30,18 @@ import './App.css';
 
 const STAFF_ID_RIGHT_HAND = 1;
 const STAFF_ID_LEFT_HAND = 2;
+// Matches PlaybackEngine's piano sample's own default release/decay time, so a struck key's
+// highlight doesn't visually cut off right at the note's written duration, before the sound
+// has actually finished fading out -- see findActiveNotesAtTime's tailSeconds.
+const KEY_HIGHLIGHT_TAIL_SECONDS = 0.5;
 
 function App() {
   const [activeNotes, setActiveNotes] = useState<DisplayNote[]>([]);
+  // Notes currently sounding during playback (distinct from activeNotes, a tap's selection) --
+  // computed from the audio clock in the playback-follow effect below, the same way the score
+  // cursor is, rather than from the playback engine's own onStart/onEnded callbacks (see
+  // findActiveNotesAtTime for why).
+  const [playingNotes, setPlayingNotes] = useState<DisplayNote[]>([]);
   const [timedNotes, setTimedNotes] = useState<TimedNote[]>([]);
   const [metronomeClicks, setMetronomeClicks] = useState<MetronomeClick[]>([]);
   const [loopRange, setLoopRange] = useState<LoopRangeState>({
@@ -91,7 +101,6 @@ function App() {
     isReady,
     isPlaying,
     tempoRatio,
-    playingNotes,
     audioError,
     metronomeEnabled,
     play,
@@ -150,22 +159,45 @@ function App() {
     }
   }, [isPlaying]);
 
-  // Follow-along cursor: while playing, repeatedly nudge the OSMD cursor to the note
-  // position matching the playback engine's current time. Uses the full (unfiltered) note
-  // list so the cursor keeps tracking real score position even when a hand is muted.
+  // Follow-along cursor + key highlight: while playing, repeatedly nudge the OSMD cursor to the
+  // note position matching the playback engine's current time, and recompute which notes are
+  // currently sounding from that same clock (see findActiveNotesAtTime) -- both driven off one
+  // audio-clock read per frame so they can't drift apart from each other or from the actual
+  // audio. The cursor uses the full (unfiltered) note list so it keeps tracking real score
+  // position even when a hand is muted; the highlight uses playableNotes so a muted hand's
+  // notes, which aren't actually heard, don't light up either.
   useEffect(() => {
     if (!isPlaying || !engine) return;
     let rafId: number;
+    let lastPlayingKey = '';
     const tick = () => {
-      const target = findTimestampAtTime(timedNotes, engine.currentTime());
+      const time = engine.currentTime();
+      const target = findTimestampAtTime(timedNotes, time);
       if (target !== null) {
         scoreViewerRef.current?.advanceCursorTo(target);
       }
+
+      // Excludes any note whose onset predates the current segment's schedule point -- it may
+      // still look "active" by its own written duration, but a seek/loop/tempo/hand-filter
+      // change cancels and reschedules from "now" (see scheduledFromSeconds), so it was never
+      // actually retriggered and isn't really sounding.
+      const sounding = findActiveNotesAtTime(playableNotes, time, KEY_HIGHLIGHT_TAIL_SECONDS).filter(
+        (n) => n.startTime >= engine.scheduledFromSeconds,
+      );
+      // Cheap content key (not just array identity, which is always fresh) to skip the state
+      // update -- and the re-render it would otherwise trigger every single animation frame --
+      // whenever the sounding set hasn't actually changed since last frame.
+      const key = sounding.map((n) => n.midi).join(',');
+      if (key !== lastPlayingKey) {
+        lastPlayingKey = key;
+        setPlayingNotes(sounding.map((n) => ({ midi: n.midi, name: n.name })));
+      }
+
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [isPlaying, engine, timedNotes]);
+  }, [isPlaying, engine, timedNotes, playableNotes]);
 
   const openPiece = (piece: Piece) => {
     pause(); // switching scores mid-playback would otherwise keep the old piece sounding

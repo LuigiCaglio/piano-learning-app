@@ -1,6 +1,6 @@
 # Handoff — Piano Learning App
 
-Status as of 2026-09-12. Written for whoever (human or Claude) picks this up next.
+Status as of 2026-10-23. Written for whoever (human or Claude) picks this up next.
 
 ## What this app is
 
@@ -163,6 +163,54 @@ Three requests:
      enough to actually require scrolling) via a throwaway Playwright
      script, screenshotting before/after a 1500px scroll -- not checked in,
      since it was throwaway.
+
+### New this session (2026-10-23): fixed playback glitches/stutter, reported after the first
+real on-tablet practice session ("when I press play it doesn't go smoothly, the sound and the
+notes following the sheet"). Root cause was in two places, both about main-thread robustness
+under real-device load, not a fundamental architecture problem -- no rewrite needed:
+
+1. **Audio glitches**: `smplr`'s default Scheduler polls a lookahead queue every 50ms with only
+   a 200ms lookahead window (`node_modules/smplr/dist/index.js`, `SchedulerImpl`). If the main
+   thread stalls (a React re-render, a layout reflow, GC) for longer than that thin margin, the
+   poll wakes up to find a note's `AudioBufferSourceNode.start(when)` call already overdue,
+   triggering it late/out of order -- an audible glitch. Since this app knows every note's exact
+   time upfront (not improvised input), there's no reason for such a short lookahead. Fixed in
+   `src/playback/PlaybackEngine.ts` by passing a custom `Scheduler(context, { lookaheadMs: 2000,
+   intervalMs: 30 })` into `SplendidGrandPiano` -- notes now get committed to the precise Web
+   Audio clock up to 2s ahead, so only a pathological stall could still cause it.
+   - Gotcha this surfaces: smplr's `onStart`/`onEnded` callbacks fire at *dispatch* time, not at
+     the note's actual audio start/end -- with a 2s lookahead they'd now fire up to 2s before the
+     sound, which would have made the piano-key highlight glaringly early. Fixed by dropping
+     `onNoteOn`/`onNoteOff` entirely (removed from `PlaybackEngine`/`usePlaybackEngine`) in favor
+     of computing "what's currently sounding" independently -- see point 3 below.
+2. **Cursor/keyboard stutter**: `PianoKeyboard.tsx` passed Klavier a freshly-constructed
+   `components` object (`{...realistic, label: ...}`) on every render. Klavier's own ~60 key
+   subcomponents are `React.memo`'d, but all share that one `components` prop by reference --
+   a new object every render means every key re-renders on every single note on/off, not just
+   the 1-2 keys that actually changed. Fixed by `useMemo`-stabilizing both `components` and the
+   `KeyLabel` function (keyed only on `showNoteNames`, reading note names from a ref instead of
+   closing over `activeNotes`) so only the keys whose `active` state actually flips re-render.
+3. **Decoupled the piano-key highlight from the audio engine's callbacks, onto the same
+   audio-clock polling the score cursor already uses** (`App.tsx`'s playback-follow `useEffect`,
+   now also computing "sounding notes" every animation frame via the new
+   `findActiveNotesAtTime` in `extractTimedNotes.ts`, gated behind a content-key check so it
+   only calls `setState` when the sounding set actually changes). This removes the dependency on
+   smplr's dispatch timing for anything user-visible, and keeps the cursor and the keyboard
+   highlight from a single source of truth so they can't drift apart from each other or from the
+   audio under load.
+   - `findActiveNotesAtTime(notes, currentTime, tailSeconds)`: a note is "sounding" from its
+     onset to its written duration's end, plus `tailSeconds` -- `App.tsx` passes `0.5` (matching
+     `SplendidGrandPiano`'s own default sample decay/release time) so a highlight doesn't cut off
+     right as the written note ends, before the sound has actually faded.
+   - Gotcha this surfaced, caught by `tests/playback.spec.ts`'s tap-to-seek test: computing
+     "sounding" purely from a note's own written duration doesn't know that a seek/loop/tempo/
+     hand-filter change cancels and reschedules from "now" (`PlaybackEngine.scheduleFrom` skips
+     any note whose onset is before the new segment's start) -- a long sustained note whose onset
+     was *before* that point but whose written duration (plus tail) would still cover "now" was
+     showing as sounding even though it was never actually retriggered this segment. Fixed with a
+     new `PlaybackEngine.scheduledFromSeconds` getter (exposes the private `startOffsetSeconds`
+     anchor), and `App.tsx` filters `findActiveNotesAtTime`'s result to `note.startTime >=
+     engine.scheduledFromSeconds`.
 
 ## Useful commands
 - `npm run build` — typecheck + production build

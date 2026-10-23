@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PlaybackEngine } from './PlaybackEngine';
 import type { MetronomeClick, TimedNote } from '../components/ScoreViewer/extractTimedNotes';
-import type { DisplayNote } from '../lib/midi';
 
 export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: MetronomeClick[] = []) {
   const engineRef = useRef<PlaybackEngine | null>(null);
@@ -12,7 +11,6 @@ export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: Metr
   const [isReady, setIsReady] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [tempoRatio, setTempoRatioState] = useState(1);
-  const [playingNotes, setPlayingNotes] = useState<DisplayNote[]>([]);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [metronomeEnabled, setMetronomeEnabledState] = useState(false);
 
@@ -21,9 +19,6 @@ export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: Metr
   // engine instead of leaving engineRef pointing at an already-disposed one.
   useEffect(() => {
     const engine = new PlaybackEngine({
-      onNoteOn: (midi, name) =>
-        setPlayingNotes((prev) => (prev.some((n) => n.midi === midi) ? prev : [...prev, { midi, name }])),
-      onNoteOff: (midi) => setPlayingNotes((prev) => prev.filter((n) => n.midi !== midi)),
       onPlaybackEnd: () => setIsPlaying(false),
     });
     engineRef.current = engine;
@@ -81,7 +76,6 @@ export function usePlaybackEngine(timedNotes: TimedNote[], metronomeClicks: Metr
     isReady,
     isPlaying,
     tempoRatio,
-    playingNotes,
     audioError,
     metronomeEnabled,
     play,
